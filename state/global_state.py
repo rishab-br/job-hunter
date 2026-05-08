@@ -10,14 +10,15 @@ class SystemPhase(str, Enum):
     APPLYING = "applying"
     TRACKING = "tracking"
     OFFER_EVALUATION = "offer_evaluation"
+    INTERVIEW_PREP = "interview_prep"
 
 
 class GlobalState(TypedDict):
     # ── User config ────────────────────────────────────────────────────────────
     github_username: str
     target_role: str
-    target_market: str       # e.g. "India", "US", "Remote"
-    target_niche: str        # e.g. "MLOps", "Backend", "Full Stack"
+    target_market: str
+    target_niche: str
 
     # ── System bookkeeping ─────────────────────────────────────────────────────
     current_phase: SystemPhase
@@ -26,27 +27,27 @@ class GlobalState(TypedDict):
     logs: list[str]
 
     # ── GitHub Intelligence ────────────────────────────────────────────────────
-    github_profile: Optional[dict[str, Any]]          # raw profile snapshot
-    github_repos: Optional[list[dict[str, Any]]]      # per-repo raw data
-    github_audit: Optional[dict[str, Any]]            # Profile Auditor output
-    repo_depth_reports: Optional[list[dict[str, Any]]] # Project Depth Analyzer output
-    trend_data: Optional[dict[str, Any]]              # Trend Scout output
-    gap_analysis: Optional[dict[str, Any]]            # Gap Analyzer output
-    improvement_plan: Optional[list[dict[str, Any]]]  # Improvement Planner output
+    github_profile: Optional[dict[str, Any]]
+    github_repos: Optional[list[dict[str, Any]]]
+    github_audit: Optional[dict[str, Any]]
+    repo_depth_reports: Optional[list[dict[str, Any]]]
+    trend_data: Optional[dict[str, Any]]
+    gap_analysis: Optional[dict[str, Any]]
+    improvement_plan: Optional[list[dict[str, Any]]]
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
-    discovered_jobs: Optional[list[dict[str, Any]]]   # raw listings from scrapers
-    analyzed_jds: Optional[list[dict[str, Any]]]      # JD Analyzer output
-    scored_jobs: Optional[list[dict[str, Any]]]       # Relevance Scorer output
+    discovered_jobs: Optional[list[dict[str, Any]]]
+    analyzed_jds: Optional[list[dict[str, Any]]]
+    scored_jobs: Optional[list[dict[str, Any]]]
 
     # ── Application Engine ─────────────────────────────────────────────────────
-    applications: Optional[list[dict[str, Any]]]      # submitted applications
-    pending_approvals: Optional[list[dict[str, Any]]] # awaiting human confirm
+    applications: Optional[list[dict[str, Any]]]
+    pending_approvals: Optional[list[dict[str, Any]]]
 
     # ── Status Tracker ─────────────────────────────────────────────────────────
-    application_statuses: Optional[dict[str, str]]    # app_id → status
+    application_statuses: Optional[dict[str, str]]
     followup_queue: Optional[list[dict[str, Any]]]
-    ghosted_applications: Optional[list[str]]         # app_ids gone cold
+    ghosted_applications: Optional[list[str]]
     pipeline_report: Optional[dict[str, Any]]
 
     # ── Offer Intelligence ─────────────────────────────────────────────────────
@@ -54,6 +55,10 @@ class GlobalState(TypedDict):
     offer_evaluations: Optional[list[dict[str, Any]]]
     negotiation_scripts: Optional[list[dict[str, Any]]]
     response_coaching: Optional[list[dict[str, Any]]]
+
+    # ── Interview Prep ─────────────────────────────────────────────────────────
+    interview_prep_target: Optional[dict[str, Any]]   # job being prepped for
+    interview_prep_sessions: Optional[list[dict[str, Any]]]  # completed sessions
 
 
 def initial_state(
@@ -91,4 +96,6 @@ def initial_state(
         offer_evaluations=None,
         negotiation_scripts=None,
         response_coaching=None,
+        interview_prep_target=None,
+        interview_prep_sessions=None,
     )

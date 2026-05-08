@@ -9,15 +9,17 @@ Subcommands
   offer       Inject a job offer and run Offer Intelligence
   resume      Resume a pipeline paused at the human-approval gate
   respond     Inject employer's counter-offer response and get coaching
+  prep        Generate a full interview cheat sheet for a specific role
 
 Usage examples
 --------------
-  python main.py github --username johndoe --role "AI Engineer" --niche "MLOps"
-  python main.py full   --username johndoe --role "AI Engineer" --niche "MLOps" --market "India"
-  python main.py status --thread-id <uuid>
-  python main.py offer  --thread-id <uuid> --company "TechCorp" --role "ML Engineer" --offer-file offer.txt
-  python main.py resume --thread-id <uuid> --approve
+  python main.py github  --username johndoe --role "AI Engineer" --niche "MLOps"
+  python main.py full    --username johndoe --role "AI Engineer" --niche "MLOps" --market "India"
+  python main.py status  --thread-id <uuid>
+  python main.py offer   --thread-id <uuid> --company "TechCorp" --role "ML Engineer" --offer-file offer.txt
+  python main.py resume  --thread-id <uuid> --approve
   python main.py respond --thread-id <uuid> --offer-id offer_abc12345 --response-file response.txt
+  python main.py prep    --company "Acme AI" --role "ML Engineer" --jd-file jd.txt --company-url acme.ai
 """
 import argparse
 import json
@@ -36,6 +38,7 @@ from orchestrator import (
     resume_after_approval,
     inject_offer,
     inject_employer_response,
+    inject_interview_target,
 )
 from agents.github_intelligence.lead import build_subgraph as _github_sg
 
@@ -178,6 +181,45 @@ def cmd_resume(args: argparse.Namespace) -> None:
     _save_session(args.thread_id, result)
     _print_logs(result)
     _print_pipeline_summary(result)
+
+
+def cmd_prep(args: argparse.Namespace) -> None:
+    """Run Interview Prep for a specific role."""
+    # Load JD text
+    if args.jd_file:
+        jd_text = Path(args.jd_file).read_text(encoding="utf-8")
+    elif args.jd_text:
+        jd_text = args.jd_text
+    else:
+        console.print("[red]Provide JD via --jd-file or --jd-text[/red]")
+        sys.exit(1)
+
+    # Base state — load existing session or create a bare one
+    state = _load_session(args.thread_id) if args.thread_id else _make_bare_state(args)
+
+    console.print(Panel(
+        f"[bold cyan]Interview Prep[/bold cyan]\n"
+        f"Company: [green]{args.company}[/green]  →  "
+        f"Role: [yellow]{args.role}[/yellow]",
+        title="JobHunter", border_style="cyan",
+    ))
+
+    state = inject_interview_target(
+        state,
+        company=args.company,
+        role=args.role,
+        jd_text=jd_text,
+        company_url=getattr(args, "company_url", "") or "",
+        job_id=getattr(args, "job_id", None),
+    )
+
+    with console.status("[cyan]Preparing interview materials...[/cyan]", spinner="dots"):
+        result, thread_id = run_module("interview_prep", state, thread_id=args.thread_id)
+
+    _save_session(thread_id, result)
+    _print_logs(result)
+    _print_prep_summary(result)
+    console.print(f"\n[bold green]Thread ID:[/bold green] {thread_id}")
 
 
 def cmd_respond(args: argparse.Namespace) -> None:
@@ -340,6 +382,37 @@ def _print_response_coaching(state: GlobalState) -> None:
         ))
 
 
+def _print_prep_summary(state: GlobalState) -> None:
+    sessions = state.get("interview_prep_sessions") or []
+    if not sessions:
+        return
+    session = sessions[-1]  # most recent
+    target = state.get("interview_prep_target") or {}
+    questions = target.get("questions") or {}
+
+    tech_count = len(questions.get("technical_questions", []))
+    sd_count   = len(questions.get("system_design_questions", []))
+    beh_count  = len(questions.get("behavioral_questions", []))
+    co_count   = len(questions.get("company_specific_questions", []))
+    ask_count  = len(questions.get("questions_to_ask_interviewer", []))
+
+    console.print(Panel(
+        f"[bold]Company:[/bold]  {session.get('company')}\n"
+        f"[bold]Role:[/bold]     {session.get('role')}\n"
+        f"[bold]Prep Date:[/bold] {session.get('prep_date')}\n\n"
+        f"[bold cyan]Questions Generated:[/bold cyan]\n"
+        f"  Technical:       [green]{tech_count}[/]\n"
+        f"  System Design:   [green]{sd_count}[/]\n"
+        f"  Behavioral:      [green]{beh_count}[/]\n"
+        f"  Company-Specific:[green]{co_count}[/]\n"
+        f"  To Ask Them:     [green]{ask_count}[/]\n\n"
+        f"[bold green]Cheat Sheet:[/bold green] {session.get('cheat_sheet_path', 'N/A')}\n"
+        f"[bold yellow]Quick Card:[/bold yellow]  {session.get('quick_card_path', 'N/A')}",
+        title="Interview Prep Complete ✅",
+        border_style="green",
+    ))
+
+
 def _make_bare_state(args: argparse.Namespace) -> GlobalState:
     return initial_state(
         github_username=getattr(args, "username", ""),
@@ -394,6 +467,19 @@ def main() -> None:
     approve_group.add_argument("--approve", action="store_true")
     approve_group.add_argument("--skip", dest="approve", action="store_false")
 
+    # prep
+    p_prep = sub.add_parser("prep", help="Generate interview prep materials for a specific role")
+    p_prep.add_argument("--company", required=True)
+    p_prep.add_argument("--role", required=True)
+    p_prep.add_argument("--jd-file", dest="jd_file", default=None, help="Path to JD text file")
+    p_prep.add_argument("--jd-text", dest="jd_text", default=None, help="JD text inline")
+    p_prep.add_argument("--company-url", dest="company_url", default="", help="Company website URL for richer research")
+    p_prep.add_argument("--job-id", dest="job_id", default=None, help="Optional job_id to link to an existing application")
+    p_prep.add_argument("--thread-id", dest="thread_id", default=None, help="Existing session thread to append prep to")
+    p_prep.add_argument("--username", default="")
+    p_prep.add_argument("--market", default="India")
+    p_prep.add_argument("--niche", default="")
+
     # respond
     p_respond = sub.add_parser("respond", help="Get coaching on employer's counter-offer response")
     p_respond.add_argument("--thread-id", required=True, dest="thread_id")
@@ -410,6 +496,7 @@ def main() -> None:
         "offer":   cmd_offer,
         "resume":  cmd_resume,
         "respond": cmd_respond,
+        "prep":    cmd_prep,
     }
     dispatch[args.command](args)
 

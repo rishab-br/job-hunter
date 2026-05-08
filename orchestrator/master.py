@@ -14,6 +14,7 @@ from agents.job_discovery import build_subgraph as _job_discovery_sg
 from agents.application_engine import build_subgraph as _application_engine_sg
 from agents.status_tracker import build_subgraph as _status_tracker_sg
 from agents.offer_intelligence import build_subgraph as _offer_intelligence_sg
+from agents.interview_prep import build_subgraph as _interview_prep_sg
 
 
 # ── Routing ────────────────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ def _route(state: GlobalState) -> str:
         SystemPhase.APPLYING:         "application_engine",
         SystemPhase.TRACKING:         "status_tracker",
         SystemPhase.OFFER_EVALUATION: "offer_intelligence",
+        SystemPhase.INTERVIEW_PREP:   "interview_prep",
         SystemPhase.IDLE:             END,
     }.get(phase, END)
 
@@ -50,6 +52,7 @@ def build_graph() -> StateGraph:
     graph.add_node("application_engine",   _application_engine_sg().compile())
     graph.add_node("status_tracker",       _status_tracker_sg().compile())
     graph.add_node("offer_intelligence",   _offer_intelligence_sg().compile())
+    graph.add_node("interview_prep",       _interview_prep_sg().compile())
 
     # Wiring
     graph.set_entry_point("router")
@@ -59,6 +62,7 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges("application_engine",  _route)
     graph.add_conditional_edges("status_tracker",      _route)
     graph.add_edge("offer_intelligence", END)
+    graph.add_edge("interview_prep",     END)
 
     return graph
 
@@ -114,6 +118,7 @@ def run_module(
         "application":   SystemPhase.APPLYING,
         "status":        SystemPhase.TRACKING,
         "offer":         SystemPhase.OFFER_EVALUATION,
+        "interview_prep": SystemPhase.INTERVIEW_PREP,
     }
     if module not in phase_map:
         raise ValueError(f"Unknown module '{module}'. Choose from: {list(phase_map)}")
@@ -165,6 +170,28 @@ def inject_offer(
     active_offers = list(state.get("active_offers") or [])
     active_offers.append(offer)
     return {**state, "active_offers": active_offers, "current_phase": SystemPhase.OFFER_EVALUATION}
+
+
+def inject_interview_target(
+    state: GlobalState,
+    company: str,
+    role: str,
+    jd_text: str,
+    company_url: str = "",
+    job_id: str | None = None,
+) -> GlobalState:
+    """
+    Sets up interview_prep_target so Interview Prep Lead can run.
+    Call this then run_module("interview_prep", state).
+    """
+    target = {
+        "company": company,
+        "role": role,
+        "jd_text": jd_text,
+        "company_url": company_url,
+        "job_id": job_id or f"job_{uuid.uuid4().hex[:8]}",
+    }
+    return {**state, "interview_prep_target": target, "current_phase": SystemPhase.INTERVIEW_PREP}
 
 
 def inject_employer_response(

@@ -6,6 +6,7 @@ from .master import (
     resume_after_approval,
     inject_offer,
     inject_employer_response,
+    inject_interview_target,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "resume_after_approval",
     "inject_offer",
     "inject_employer_response",
+    "inject_interview_target",
 ]
