@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JobHunter — Mission Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f14; --bg2: #12151d; --bg3: #181c26;
+    --border: rgba(255,255,255,0.07); --border-hi: rgba(255,255,255,0.13);
+    --cyan: #00d4ff; --amber: #f59e0b; --emerald: #10b981; --red: #ef4444; --violet: #a78bfa;
+    --text: #e2e8f0; --muted: #64748b;
+    --mono: 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; overflow: hidden; }
+  .app { display: flex; height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 220px; min-width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .logo-area { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
+  .logo { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--cyan); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .logo-icon svg { width: 16px; height: 16px; fill: #0d0f14; }
+  .logo-text { font-size: 15px; font-weight: 700; color: var(--cyan); letter-spacing: -0.3px; }
+  .logo-tag { font-size: 10px; color: var(--muted); }
+  .nav { padding: 10px 8px; flex: 1; overflow-y: auto; }
+  .nav-section { font-size: 9px; color: var(--muted); letter-spacing: 1.2px; text-transform: uppercase; padding: 10px 8px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 12px; transition: all .15s; margin-bottom: 1px; }
+  .nav-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+  .nav-item.active { background: rgba(0,212,255,.1); color: var(--cyan); border-left: 2px solid var(--cyan); padding-left: 8px; }
+  .nav-item svg { width: 14px; height: 14px; stroke-width: 1.8; flex-shrink: 0; }
+  .session-area { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .session-label { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .session-select { width: 100%; padding: 5px 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; font-family: var(--mono); outline: none; cursor: pointer; }
+  .phase-badge { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 4px; background: rgba(16,185,129,.15); color: var(--emerald); font-size: 9px; letter-spacing: .5px; border: 1px solid rgba(16,185,129,.25); }
+  .new-session-btn { width: 100%; margin-top: 8px; padding: 5px; border-radius: 5px; border: 1px solid var(--border-hi); background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; font-family: var(--sans); transition: all .15s; }
+  .new-session-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* ── Main ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Topbar ── */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+  .topbar-left { font-size: 13px; color: var(--muted); }
+  .topbar-left span { color: var(--text); font-weight: 500; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-ghost { padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border-hi); background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; transition: all .15s; font-family: var(--sans); }
+  .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn-primary { padding: 5px 12px; border-radius: 5px; border: 1px solid var(--cyan); background: rgba(0,212,255,.1); color: var(--cyan); font-size: 11px; cursor: pointer; font-family: var(--sans); transition: all .15s; }
+  .btn-primary:hover { background: rgba(0,212,255,.2); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Screens ── */
+  .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .screen.active { display: flex; }
+  .content { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+  /* ── Quick Stats ── */
+  .quick-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: .3px; margin-bottom: 6px; }
+  .stat-val { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-trend { display: flex; align-items: center; gap: 4px; margin-top: 5px; font-size: 10px; }
+  .trend-up { color: var(--emerald); } .trend-neutral { color: var(--muted); }
+
+  /* ── Pipeline ── */
+  .pipeline-bar { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; }
+  .pipeline-title { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+  .pipeline-flow { display: flex; align-items: center; }
+  .pipe-step { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .pipe-node { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-hi); background: var(--bg3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; }
+  .pipe-node.active { border-color: var(--cyan); background: rgba(0,212,255,.12); box-shadow: 0 0 12px rgba(0,212,255,.2); }
+  .pipe-node.done { border-color: var(--emerald); background: rgba(16,185,129,.1); }
+  .pipe-node svg { width: 14px; height: 14px; stroke-width: 1.8; stroke: var(--muted); }
+  .pipe-node.active svg { stroke: var(--cyan); }
+  .pipe-node.done svg { stroke: var(--emerald); }
+  .pipe-label { font-size: 9px; color: var(--muted); text-align: center; max-width: 70px; line-height: 1.3; }
+  .pipe-label.active-l { color: var(--cyan); }
+  .pipe-label.done-l { color: var(--emerald); }
+  .pipe-connector { flex: 1; display: flex; align-items: center; margin-bottom: 20px; }
+  .pipe-line { flex: 1; height: 1px; background: var(--border); position: relative; overflow: hidden; }
+  .pipe-line.flow { background: rgba(0,212,255,.3); }
+  .pipe-line.flow::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg,transparent,var(--cyan),transparent); animation: flow 2s linear infinite; }
+  @keyframes flow { to { left: 100%; } }
+
+  /* ── Module grid ── */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-title { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .module-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+  .module-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 14px; transition: border-color .15s; }
+  .module-card:hover { border-color: var(--border-hi); }
+  .module-card.running { border-color: rgba(0,212,255,.3); }
+  .module-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .module-icon { width: 30px; height: 30px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+  .module-icon svg { width: 14px; height: 14px; stroke-width: 1.8; stroke: var(--muted); }
+  .module-badge { display: flex; align-items: center; gap: 4px; font-size: 9px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+  .badge-running { background: rgba(0,212,255,.12); color: var(--cyan); border: 1px solid rgba(0,212,255,.25); }
+  .badge-idle { background: rgba(100,116,139,.1); color: var(--muted); border: 1px solid var(--border); }
+  .badge-done { background: rgba(16,185,129,.1); color: var(--emerald); border: 1px solid rgba(16,185,129,.25); }
+  .badge-warn { background: rgba(245,158,11,.1); color: var(--amber); border: 1px solid rgba(245,158,11,.25); }
+  .module-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .module-ts { font-size: 10px; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
+  .module-metric { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .module-metric-label { font-size: 10px; color: var(--muted); margin-bottom: 10px; }
+  .btn-run { width: 100%; padding: 5px; border-radius: 4px; border: 1px solid var(--border-hi); background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; font-family: var(--sans); transition: all .15s; letter-spacing: .5px; }
+  .btn-run:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.06); }
+  .btn-run.running-btn { border-color: var(--cyan); color: var(--cyan); pointer-events: none; }
+
+  /* ── Dot ── */
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot.pulse { background: var(--emerald); animation: pulse-g 2s infinite; }
+  .dot.idle { background: var(--muted); }
+  .dot.active-dot { background: var(--cyan); animation: pulse-c 1.5s infinite; }
+  .dot.warn-dot { background: var(--amber); }
+  @keyframes pulse-g { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.5)} 50%{box-shadow:0 0 0 4px rgba(16,185,129,0)} }
+  @keyframes pulse-c { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.5)} 50%{box-shadow:0 0 0 4px rgba(0,212,255,0)} }
+
+  /* ── Log panel ── */
+  .log-panel { background: var(--bg2); border-top: 1px solid var(--border); height: 160px; flex-shrink: 0; display: flex; flex-direction: column; }
+  .log-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .log-title { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+  .log-body { flex: 1; overflow-y: auto; padding: 8px 14px; font-family: var(--mono); font-size: 10px; line-height: 1.7; }
+  .log-body::-webkit-scrollbar { width: 3px; }
+  .log-body::-webkit-scrollbar-thumb { background: var(--border-hi); }
+  .log-line { display: flex; gap: 8px; }
+  .log-ts { color: var(--muted); min-width: 55px; }
+  .log-tag { min-width: 120px; }
+  .tag-github { color: var(--violet); } .tag-discovery { color: var(--cyan); }
+  .tag-app { color: var(--emerald); } .tag-offer { color: var(--amber); }
+  .tag-prep { color: #f472b6; } .tag-system { color: var(--muted); }
+  .log-msg { color: #94a3b8; }
+  .log-msg.success { color: var(--emerald); } .log-msg.warn { color: var(--amber); }
+  .log-msg.info { color: var(--cyan); } .log-msg.error { color: var(--red); }
+
+  /* ── Table ── */
+  .data-table { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .data-table table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .data-table thead tr { border-bottom: 1px solid var(--border); }
+  .data-table th { padding: 9px 12px; text-align: left; font-size: 9px; color: var(--muted); letter-spacing: 1px; font-weight: 500; }
+  .data-table td { padding: 9px 12px; font-size: 12px; border-bottom: 1px solid var(--border); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover { background: rgba(255,255,255,.02); }
+
+  /* ── Score bar ── */
+  .score-bar { display: flex; align-items: center; gap: 6px; }
+  .score-track { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; max-width: 60px; }
+  .score-fill { height: 100%; border-radius: 2px; }
+  .score-val { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+
+  /* ── Pill ── */
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 500; }
+  .pill-cyan { background: rgba(0,212,255,.1); color: var(--cyan); border: 1px solid rgba(0,212,255,.2); }
+  .pill-emerald { background: rgba(16,185,129,.1); color: var(--emerald); border: 1px solid rgba(16,185,129,.2); }
+  .pill-amber { background: rgba(245,158,11,.1); color: var(--amber); border: 1px solid rgba(245,158,11,.2); }
+  .pill-red { background: rgba(239,68,68,.1); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+  .pill-violet { background: rgba(167,139,250,.1); color: var(--violet); border: 1px solid rgba(167,139,250,.2); }
+  .pill-muted { background: rgba(100,116,139,.1); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ── Cards (audit / offer) ── */
+  .info-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 12px; }
+  .info-card-title { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .kv { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .kv-key { font-size: 11px; color: var(--muted); }
+  .kv-val { font-size: 12px; color: var(--text); text-align: right; max-width: 60%; }
+  .score-big { font-size: 36px; font-weight: 700; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+  /* ── Filters row ── */
+  .filters { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filters input, .filters select { padding: 6px 10px; background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 12px; font-family: var(--sans); outline: none; }
+  .filters input { flex: 1; }
+  .filters input::placeholder { color: var(--muted); }
+
+  /* ── Two-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 14px; height: 100%; min-height: 0; }
+  .two-col-left { overflow-y: auto; }
+  .two-col-right { position: sticky; top: 0; overflow-y: auto; }
+
+  /* ── Modal ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border-hi); border-radius: 8px; padding: 24px; width: 480px; max-width: 95vw; }
+  .modal-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+  .modal label { display: block; font-size: 10px; color: var(--muted); letter-spacing: .5px; margin-bottom: 4px; margin-top: 12px; }
+  .modal input, .modal textarea, .modal select { width: 100%; padding: 7px 10px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: 5px; color: var(--text); font-size: 12px; font-family: var(--sans); outline: none; }
+  .modal textarea { height: 80px; resize: vertical; font-family: var(--mono); font-size: 11px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  /* ── Empty state ── */
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--muted); gap: 8px; }
+  .empty svg { width: 32px; height: 32px; stroke: var(--muted); opacity: .4; }
+  .empty p { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo-area">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 16 16"><path d="M8 1L10.5 6H14L11 9.5L12.5 14.5L8 12L3.5 14.5L5 9.5L2 6H5.5L8 1Z"/></svg>
+        </div>
+        <span class="logo-text">JobHunter</span>
+      </div>
+      <div class="logo-tag">Your autonomous career agent</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Main</div>
+      <div class="nav-item active" data-screen="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-section">Modules</div>
+      <div class="nav-item" data-screen="github">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+        GitHub Intel
+      </div>
+      <div class="nav-item" data-screen="discovery">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Job Discovery
+      </div>
+      <div class="nav-item" data-screen="applications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+        Applications
+      </div>
+      <div class="nav-item" data-screen="offers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Offers
+      </div>
+      <div class="nav-item" data-screen="interview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Interview Prep
+      </div>
+    </nav>
+    <div class="session-area">
+      <div class="session-label">Session</div>
+      <select class="session-select" id="session-select">
+        <option value="">— no session —</option>
+      </select>
+      <div id="phase-badge" class="phase-badge" style="display:none">● IDLE</div>
+      <button class="new-session-btn" onclick="openNewSession()">+ New Session</button>
+    </div>
+  </aside>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <section class="screen active" id="screen-dashboard">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>Dashboard</span></div>
+        <div class="topbar-actions">
+          <button class="btn-ghost" onclick="loadDashboard()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="quick-stats" id="dash-stats">
+          <div class="stat-card"><div class="stat-label">JOBS FOUND</div><div class="stat-val" id="stat-jobs">—</div><div class="stat-trend trend-neutral">Loading…</div></div>
+          <div class="stat-card"><div class="stat-label">APPLICATIONS SENT</div><div class="stat-val" id="stat-apps">—</div><div class="stat-trend trend-neutral"> </div></div>
+          <div class="stat-card"><div class="stat-label">INTERVIEWS PREPPED</div><div class="stat-val" id="stat-prep">—</div><div class="stat-trend trend-neutral"> </div></div>
+          <div class="stat-card"><div class="stat-label">OFFERS RECEIVED</div><div class="stat-val" id="stat-offers" style="color:var(--amber)">—</div><div class="stat-trend trend-neutral"> </div></div>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="pipeline-bar">
+          <div class="pipeline-title">Pipeline Status</div>
+          <div class="pipeline-flow" id="pipeline-flow">
+            <!-- built by JS -->
+          </div>
+        </div>
+
+        <!-- Module grid -->
+        <div class="section-header"><div class="section-title">Agent Modules</div></div>
+        <div class="module-grid" id="module-grid">
+          <!-- built by JS -->
+        </div>
+      </div>
+      <div class="log-panel">
+        <div class="log-header">
+          <div class="log-title"><span class="dot active-dot" id="log-dot"></span> Agent Log — Live Output</div>
+          <button class="btn-ghost" style="font-size:9px;padding:3px 8px" onclick="clearLog()">CLEAR</button>
+        </div>
+        <div class="log-body" id="log-body"></div>
+      </div>
+    </section>
+
+    <!-- GITHUB INTEL -->
+    <section class="screen" id="screen-github">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>GitHub Intel</span></div>
+        <div class="topbar-actions">
+          <button class="btn-primary" id="btn-run-github" onclick="runModule('github')">▶ Run GitHub Intel</button>
+        </div>
+      </div>
+      <div class="content" id="github-content">
+        <div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M9 19c-5 1.5-5-2.5-7-3"/></svg><p>Run GitHub Intel to see your portfolio audit</p></div>
+      </div>
+    </section>
+
+    <!-- JOB DISCOVERY -->
+    <section class="screen" id="screen-discovery">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>Job Discovery</span></div>
+        <div class="topbar-actions">
+          <button class="btn-ghost" onclick="exportCSV()">↓ Export CSV</button>
+          <button class="btn-primary" id="btn-run-discovery" onclick="runModule('discovery')">▶ Rescan</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="filters">
+          <input type="text" id="job-filter" placeholder="Filter by company, role…" oninput="filterJobs()" />
+          <select id="job-platform" onchange="filterJobs()">
+            <option value="">All Platforms</option>
+            <option>LinkedIn</option><option>Indeed</option><option>Naukri</option>
+          </select>
+          <select id="job-status" onchange="filterJobs()">
+            <option value="">All Priority</option>
+            <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+          <span class="trend-neutral" id="job-count" style="font-size:10px;white-space:nowrap">0 results</span>
+        </div>
+        <div class="data-table">
+          <table>
+            <thead><tr>
+              <th style="width:18%">COMPANY</th><th style="width:24%">ROLE</th>
+              <th style="width:12%">SCORE</th><th style="width:12%">PLATFORM</th>
+              <th style="width:12%">PRIORITY</th><th style="width:11%">ACTIONS</th>
+            </tr></thead>
+            <tbody id="jobs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- APPLICATIONS -->
+    <section class="screen" id="screen-applications">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>Applications</span></div>
+        <div class="topbar-actions">
+          <button class="btn-primary" id="btn-run-application" onclick="runModule('application')">▶ Apply to Queued</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="data-table">
+          <table>
+            <thead><tr>
+              <th style="width:20%">COMPANY</th><th style="width:26%">ROLE</th>
+              <th style="width:14%">PLATFORM</th><th style="width:16%">STATUS</th>
+              <th style="width:14%">SUBMITTED</th><th style="width:10%">ACTION</th>
+            </tr></thead>
+            <tbody id="apps-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- OFFERS -->
+    <section class="screen" id="screen-offers">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>Offer Intelligence</span></div>
+        <div class="topbar-actions">
+          <button class="btn-ghost" onclick="openOfferModal()">+ Inject Offer</button>
+          <button class="btn-primary" id="btn-run-offer" onclick="runModule('offer')">▶ Re-evaluate</button>
+        </div>
+      </div>
+      <div class="content" id="offers-content">
+        <div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><p>No offers yet — inject one to evaluate it</p></div>
+      </div>
+    </section>
+
+    <!-- INTERVIEW PREP -->
+    <section class="screen" id="screen-interview">
+      <div class="topbar">
+        <div class="topbar-left">Mission Control / <span>Interview Prep</span></div>
+        <div class="topbar-actions">
+          <button class="btn-ghost" onclick="openPrepModal()">+ New Prep</button>
+          <button class="btn-ghost" onclick="exportAllPrep()">↓ Export All</button>
+        </div>
+      </div>
+      <div class="content" style="padding-top:16px">
+        <div class="two-col">
+          <div class="two-col-left">
+            <div class="section-title" style="margin-bottom:10px">Prep Sessions (<span id="prep-count">0</span>)</div>
+            <div id="interview-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+          <div class="two-col-right">
+            <div class="section-title" style="margin-bottom:10px">Quick Card Preview</div>
+            <div id="quick-card" class="info-card">
+              <div class="empty" style="height:160px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><p>Select a session</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── New Session Modal ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-session">
+  <div class="modal">
+    <div class="modal-title">New Session</div>
+    <label>GITHUB USERNAME</label>
+    <input type="text" id="ns-username" placeholder="johndoe" />
+    <label>TARGET ROLE</label>
+    <input type="text" id="ns-role" placeholder="AI Engineer" />
+    <label>TARGET MARKET</label>
+    <input type="text" id="ns-market" placeholder="India" value="India" />
+    <label>NICHE / FOCUS</label>
+    <input type="text" id="ns-niche" placeholder="MLOps, LLM fine-tuning…" />
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('modal-new-session')">Cancel</button>
+      <button class="btn-primary" onclick="createSession()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Inject Offer Modal ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-offer">
+  <div class="modal">
+    <div class="modal-title">Inject Offer for Evaluation</div>
+    <label>COMPANY</label>
+    <input type="text" id="of-company" placeholder="Stripe" />
+    <label>JOB TITLE</label>
+    <input type="text" id="of-title" placeholder="Staff Engineer" />
+    <label>OFFER LETTER TEXT</label>
+    <textarea id="of-text" placeholder="Paste the full offer letter or key details…"></textarea>
+    <label>DEADLINE DATE (optional)</label>
+    <input type="text" id="of-deadline" placeholder="2026-05-20" />
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('modal-offer')">Cancel</button>
+      <button class="btn-primary" onclick="submitOffer()">Evaluate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── New Interview Prep Modal ───────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-prep">
+  <div class="modal">
+    <div class="modal-title">New Interview Prep</div>
+    <label>COMPANY</label>
+    <input type="text" id="pr-company" placeholder="Acme AI" />
+    <label>ROLE</label>
+    <input type="text" id="pr-role" placeholder="ML Engineer" />
+    <label>COMPANY URL (optional)</label>
+    <input type="text" id="pr-url" placeholder="https://acme.ai" />
+    <label>JOB DESCRIPTION</label>
+    <textarea id="pr-jd" placeholder="Paste the full job description here…" style="height:120px"></textarea>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('modal-prep')">Cancel</button>
+      <button class="btn-primary" onclick="submitPrep()">Start Prep</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const API = 'http://localhost:8000';
+
+// ── App state ────────────────────────────────────────────────────────────────
+let currentThreadId = localStorage.getItem('jh_thread_id') || null;
+let currentPhase = 'idle';
+let allJobs = [];
+let activeJobId = null;
+let sseSource = null;
+let moduleStates = {};   // module -> {status, metric, metricLabel, ts}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const screen = el.dataset.screen;
+    showScreen(screen);
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    // Lazy-load screen data
+    if (screen === 'discovery') loadJobs();
+    if (screen === 'applications') loadApplications();
+    if (screen === 'offers') loadOffers();
+    if (screen === 'interview') loadPrep();
+    if (screen === 'github') loadAudit();
+  });
+});
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const s = document.getElementById('screen-' + name);
+  if (s) s.classList.add('active');
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────────
+async function loadSessionList() {
+  const res = await fetch(`${API}/api/sessions`).catch(() => null);
+  if (!res || !res.ok) return;
+  const sessions = await res.json();
+  const sel = document.getElementById('session-select');
+  sel.innerHTML = '<option value="">— no session —</option>';
+  sessions.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.thread_id;
+    opt.textContent = `${s.github_username || '?'} · ${s.target_role || '?'} (${s.thread_id.slice(0,8)}…)`;
+    sel.appendChild(opt);
+  });
+  if (currentThreadId) {
+    sel.value = currentThreadId;
+    loadDashboard();
+  }
+}
+
+document.getElementById('session-select').addEventListener('change', function() {
+  currentThreadId = this.value || null;
+  if (currentThreadId) {
+    localStorage.setItem('jh_thread_id', currentThreadId);
+    connectSSE(currentThreadId);
+    loadDashboard();
+  } else {
+    localStorage.removeItem('jh_thread_id');
+    resetDashboard();
+  }
+});
+
+function openNewSession() { openModal('modal-new-session'); }
+
+async function createSession() {
+  const body = {
+    github_username: document.getElementById('ns-username').value.trim(),
+    target_role:     document.getElementById('ns-role').value.trim(),
+    target_market:   document.getElementById('ns-market').value.trim() || 'India',
+    target_niche:    document.getElementById('ns-niche').value.trim(),
+  };
+  if (!body.github_username || !body.target_role) { alert('Username and role are required.'); return; }
+  const res = await fetch(`${API}/api/sessions`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await res.json();
+  currentThreadId = data.thread_id;
+  localStorage.setItem('jh_thread_id', currentThreadId);
+  closeModal('modal-new-session');
+  await loadSessionList();
+  connectSSE(currentThreadId);
+  loadDashboard();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/summary`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+
+  document.getElementById('stat-jobs').textContent  = d.jobs_found;
+  document.getElementById('stat-apps').textContent  = d.apps_submitted;
+  document.getElementById('stat-prep').textContent  = d.prep_sessions;
+  document.getElementById('stat-offers').textContent = d.offers_received;
+  currentPhase = d.current_phase || 'idle';
+  updatePhaseBadge(currentPhase);
+  buildPipeline(d);
+  buildModuleGrid(d);
+
+  // Seed log with last 10 lines
+  const lb = document.getElementById('log-body');
+  if (lb.children.length === 0) {
+    const logs = (d.logs || []).slice(-10);
+    logs.forEach(l => prependLog(l));
+  }
+}
+
+function resetDashboard() {
+  ['stat-jobs','stat-apps','stat-prep','stat-offers'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = '—';
+  });
+}
+
+function updatePhaseBadge(phase) {
+  const badge = document.getElementById('phase-badge');
+  badge.style.display = 'inline-block';
+  badge.textContent = '● ' + phase.toUpperCase().replace('_',' ');
+}
+
+// ── Pipeline ─────────────────────────────────────────────────────────────────
+const PIPE_STEPS = [
+  { key: 'github_analysis',  label: 'GitHub Intel', icon: '<circle cx="12" cy="12" r="10"/>' },
+  { key: 'job_discovery',    label: 'Job Discovery', icon: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>' },
+  { key: 'applying',         label: 'App Engine', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16h16V8z"/>' },
+  { key: 'tracking',         label: 'Status Tracker', icon: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
+  { key: 'offer_evaluation', label: 'Offer Intel', icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+  { key: 'interview_prep',   label: 'Interview Prep', icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+];
+
+function buildPipeline(d) {
+  const phaseOrder = PIPE_STEPS.map(s => s.key);
+  const curIdx = phaseOrder.indexOf(currentPhase);
+  const container = document.getElementById('pipeline-flow');
+  container.innerHTML = '';
+
+  PIPE_STEPS.forEach((step, i) => {
+    const isDone = curIdx > i || (d[`has_${step.key.split('_')[0]}`]);
+    const isActive = step.key === currentPhase;
+    const nodeClass = isActive ? 'active' : (isDone ? 'done' : '');
+    const labelClass = isActive ? 'active-l' : (isDone ? 'done-l' : '');
+
+    container.innerHTML += `
+      <div class="pipe-step">
+        <div class="pipe-node ${nodeClass}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${step.icon}</svg>
+        </div>
+        <div class="pipe-label ${labelClass}">${step.label}</div>
+      </div>
+    `;
+    if (i < PIPE_STEPS.length - 1) {
+      const flowLine = isActive || isDone ? 'flow' : '';
+      container.innerHTML += `<div class="pipe-connector"><div class="pipe-line ${flowLine}"></div></div>`;
+    }
+  });
+}
+
+// ── Module grid ───────────────────────────────────────────────────────────────
+const MODULE_DEFS = [
+  { key: 'github',       name: 'GitHub Intel',       iconPath: '<circle cx="12" cy="12" r="10"/>', metricKey: 'github_audit.repos_analyzed', metricLabel: 'repos analyzed' },
+  { key: 'discovery',    name: 'Job Discovery',       iconPath: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>', metricKey: 'jobs_found', metricLabel: 'jobs found' },
+  { key: 'application',  name: 'Application Engine',  iconPath: '<path d="M14 2H6a2 2 0 0 0-2 2v16h16V8z"/>', metricKey: 'apps_submitted', metricLabel: 'submitted' },
+  { key: 'status',       name: 'Status Tracker',      iconPath: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>', metricKey: 'ghosted', metricLabel: 'ghosted' },
+  { key: 'offer',        name: 'Offer Intelligence',  iconPath: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', metricKey: 'offers_received', metricLabel: 'offers evaluated' },
+  { key: 'prep',         name: 'Interview Prep',      iconPath: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', metricKey: 'prep_sessions', metricLabel: 'sessions ready' },
+];
+
+function buildModuleGrid(d) {
+  const grid = document.getElementById('module-grid');
+  grid.innerHTML = '';
+  MODULE_DEFS.forEach(m => {
+    const state = moduleStates[m.key] || {};
+    const status = state.status || 'idle';
+    const metric = d[m.metricKey] ?? d[m.key] ?? state.metric ?? '—';
+    const badgeHTML = badgeFor(status);
+    const btnClass = status === 'running' ? 'running-btn' : '';
+    const btnText  = status === 'running' ? '◼ RUNNING…' : '▶ RUN MODULE';
+    grid.innerHTML += `
+      <div class="module-card ${status==='running'?'running':''}">
+        <div class="module-header">
+          <div class="module-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${m.iconPath}</svg></div>
+          ${badgeHTML}
+        </div>
+        <div class="module-name">${m.name}</div>
+        <div class="module-ts">${state.ts || 'Never run'}</div>
+        <div class="module-metric">${metric}</div>
+        <div class="module-metric-label">${m.metricLabel}</div>
+        <button class="btn-run ${btnClass}" onclick="runModule('${m.key}')">${btnText}</button>
+      </div>`;
+  });
+}
+
+function badgeFor(status) {
+  if (status === 'running') return `<div class="module-badge badge-running"><span class="dot active-dot"></span> Running</div>`;
+  if (status === 'done')    return `<div class="module-badge badge-done"><span class="dot pulse"></span> Done</div>`;
+  if (status === 'warn')    return `<div class="module-badge badge-warn"><span class="dot warn-dot"></span> Review</div>`;
+  return `<div class="module-badge badge-idle"><span class="dot idle"></span> Idle</div>`;
+}
+
+// ── Module runner ─────────────────────────────────────────────────────────────
+async function runModule(key) {
+  if (!currentThreadId) { alert('Select or create a session first.'); return; }
+  if (activeJobId) { alert('A module is already running. Wait for it to finish.'); return; }
+
+  // Special modals for offer and prep
+  if (key === 'offer') { openOfferModal(); return; }
+  if (key === 'prep')  { openPrepModal(); return; }
+
+  const endpoint = {
+    github: '/api/modules/github', discovery: '/api/modules/discovery',
+    application: '/api/modules/application', status: '/api/modules/status',
+  }[key];
+  if (!endpoint) return;
+
+  let body = { thread_id: currentThreadId };
+  // For github, pull username from session
+  if (key === 'github') {
+    const sess = await fetch(`${API}/api/sessions/${currentThreadId}`).then(r => r.json()).catch(() => ({}));
+    body.github_username = sess.github_username || '';
+    body.target_role     = sess.target_role || '';
+  }
+
+  moduleStates[key] = { status: 'running', ts: nowTs() };
+  await loadDashboard();
+
+  const res = await fetch(`${API}${endpoint}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+  }).catch(() => null);
+
+  if (!res || !res.ok) {
+    moduleStates[key].status = 'idle';
+    prependLog(`[ERROR] Failed to start ${key} module`);
+    return;
+  }
+  const { job_id } = await res.json();
+  activeJobId = job_id;
+  prependLog(`[SYSTEM] Started ${key} module — job ${job_id.slice(0,8)}…`);
+  pollJob(job_id, key);
+}
+
+async function pollJob(job_id, moduleKey) {
+  const interval = setInterval(async () => {
+    const res = await fetch(`${API}/api/jobs/${job_id}`).catch(() => null);
+    if (!res || !res.ok) return;
+    const j = await res.json();
+    if (j.status === 'done') {
+      clearInterval(interval);
+      activeJobId = null;
+      moduleStates[moduleKey] = { status: 'done', ts: nowTs() };
+      prependLog(`[SYSTEM] ✓ ${moduleKey} completed`);
+      loadDashboard();
+    } else if (j.status === 'failed') {
+      clearInterval(interval);
+      activeJobId = null;
+      moduleStates[moduleKey] = { status: 'idle', ts: nowTs() };
+      prependLog(`[ERROR] ${moduleKey} failed: ${j.error || 'unknown'}`);
+      loadDashboard();
+    }
+  }, 2000);
+}
+
+// ── SSE log streaming ─────────────────────────────────────────────────────────
+function connectSSE(thread_id) {
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  sseSource = new EventSource(`${API}/api/stream/${thread_id}`);
+  sseSource.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.startsWith('__DONE__') || msg.startsWith('__ERROR__')) return;
+    prependLog(msg);
+  };
+  sseSource.onerror = () => { /* silently retry */ };
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+function prependLog(raw) {
+  const lb = document.getElementById('log-body');
+  if (!lb) return;
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  const ts = nowTs();
+  const {tag, tagClass, msg, msgClass} = parseLogLine(raw);
+  d.innerHTML = `<span class="log-ts">${ts}</span><span class="log-tag ${tagClass}">${tag}</span><span class="log-msg ${msgClass}">${msg}</span>`;
+  lb.insertBefore(d, lb.firstChild);
+  while (lb.children.length > 20) lb.removeChild(lb.lastChild);
+}
+
+function parseLogLine(raw) {
+  const m = raw.match(/^\[([^\]]+)\]\s*(.*)/);
+  if (!m) return { tag: '[SYSTEM]', tagClass: 'tag-system', msg: raw, msgClass: '' };
+  const tag = `[${m[1]}]`;
+  const msg = m[2];
+  const key = m[1].toLowerCase();
+  const tagClass = key.includes('github') ? 'tag-github'
+    : key.includes('job') || key.includes('discovery') ? 'tag-discovery'
+    : key.includes('app') ? 'tag-app'
+    : key.includes('offer') ? 'tag-offer'
+    : key.includes('prep') || key.includes('interview') ? 'tag-prep'
+    : 'tag-system';
+  const msgClass = msg.includes('✓') || msg.includes('Done') ? 'success'
+    : msg.includes('⚠') || msg.includes('warn') ? 'warn'
+    : msg.includes('ERROR') || msg.includes('failed') ? 'error'
+    : msg.includes('→') || msg.includes('saved') ? 'info' : '';
+  return { tag, tagClass, msg, msgClass };
+}
+
+function clearLog() { const lb = document.getElementById('log-body'); if (lb) lb.innerHTML = ''; }
+function nowTs() { return new Date().toTimeString().slice(0,8); }
+
+// ── GitHub Intel screen ───────────────────────────────────────────────────────
+async function loadAudit() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/audit`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  const audit = d.github_audit;
+  const gap   = d.gap_analysis;
+  const plan  = d.improvement_plan || [];
+  const cont  = document.getElementById('github-content');
+  if (!audit) return;
+
+  const score = audit.overall_score || 0;
+  const sCol  = score >= 70 ? 'var(--emerald)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
+  cont.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="info-card">
+        <div class="info-card-title">Profile Score</div>
+        <div class="score-big" style="color:${sCol}">${score}<span style="font-size:16px;color:var(--muted)">/100</span></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted)">Bio quality: <span style="color:var(--text)">${audit.bio_quality || '—'}</span></div>
+        <div class="tag-list">
+          ${(audit.key_strengths||[]).map(s=>`<span class="pill pill-emerald">${s}</span>`).join('')}
+        </div>
+        <div class="tag-list" style="margin-top:4px">
+          ${(audit.immediate_red_flags||[]).map(f=>`<span class="pill pill-red">${f}</span>`).join('')}
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-title">Gap Analysis</div>
+        ${gap ? `
+          <div class="kv"><span class="kv-key">Severity</span><span class="kv-val">${gap.gap_severity||'—'}</span></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">Missing Skills</div>
+          <div class="tag-list">${(gap.missing_critical_skills||[]).map(s=>`<span class="pill pill-amber">${s}</span>`).join('')}</div>
+        ` : '<div class="empty" style="height:80px"><p>No gap data yet</p></div>'}
+      </div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Improvement Plan (${plan.length} actions)</div>
+      ${plan.length ? `<div class="data-table"><table>
+        <thead><tr><th style="width:4%">#</th><th style="width:40%">ACTION</th><th style="width:18%">CATEGORY</th><th style="width:12%">EFFORT</th><th style="width:12%">IMPACT</th></tr></thead>
+        <tbody>${plan.map(p=>`<tr>
+          <td style="color:var(--muted);font-family:var(--mono)">${p.priority}</td>
+          <td style="font-size:12px">${p.title||''}</td>
+          <td><span class="pill pill-muted">${p.category||''}</span></td>
+          <td><span class="pill ${p.effort==='small'?'pill-emerald':p.effort==='large'?'pill-red':'pill-amber'}">${p.effort||''}</span></td>
+          <td><span class="pill ${p.impact==='high'?'pill-emerald':p.impact==='low'?'pill-muted':'pill-cyan'}">${p.impact||''}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty" style="height:80px"><p>Run GitHub Intel to generate plan</p></div>'}
+    </div>`;
+}
+
+// ── Job Discovery screen ──────────────────────────────────────────────────────
+async function loadJobs() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/jobs`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  allJobs = d.jobs || [];
+  renderJobs(allJobs);
+}
+
+function renderJobs(jobs) {
+  const tbody = document.getElementById('jobs-tbody');
+  document.getElementById('job-count').textContent = `${jobs.length} results`;
+  if (!jobs.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No jobs found — run Job Discovery</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => {
+    const sc = j.relevance_score || 0;
+    const sCol = sc>=85?'var(--emerald)':sc>=70?'var(--cyan)':sc>=55?'var(--amber)':'var(--red)';
+    const priClass = j.priority==='high'?'pill-emerald':j.priority==='medium'?'pill-cyan':'pill-muted';
+    return `<tr>
+      <td style="font-weight:500">${j.company}</td>
+      <td style="color:#94a3b8">${j.job_title}</td>
+      <td><div class="score-bar"><div class="score-track"><div class="score-fill" style="width:${sc}%;background:${sCol}"></div></div><span class="score-val" style="color:${sCol}">${sc}</span></div></td>
+      <td><span class="pill pill-muted">${j.platform}</span></td>
+      <td><span class="pill ${priClass}">${j.priority||'low'}</span></td>
+      <td><a href="${j.url||'#'}" target="_blank" class="btn-ghost" style="font-size:9px;padding:3px 8px;text-decoration:none">Open</a></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterJobs() {
+  const q = document.getElementById('job-filter').value.toLowerCase();
+  const platform = document.getElementById('job-platform').value;
+  const priority = document.getElementById('job-status').value;
+  renderJobs(allJobs.filter(j =>
+    (!q || j.company.toLowerCase().includes(q) || j.job_title.toLowerCase().includes(q)) &&
+    (!platform || j.platform === platform) &&
+    (!priority || j.priority === priority)
+  ));
+}
+
+function exportCSV() {
+  if (!allJobs.length) return;
+  const headers = ['Company','Role','Score','Platform','Priority','URL'];
+  const rows = allJobs.map(j => [j.company,j.job_title,j.relevance_score,j.platform,j.priority,j.url]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv,' + encodeURIComponent(csv);
+  a.download = 'jobs.csv'; a.click();
+}
+
+// ── Applications screen ───────────────────────────────────────────────────────
+async function loadApplications() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/applications`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  const apps = d.applications || [];
+  const tbody = document.getElementById('apps-tbody');
+  if (!apps.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No applications yet</td></tr>`;
+    return;
+  }
+  const statusPill = s => {
+    const map = {submitted:'pill-emerald',viewed:'pill-cyan',shortlisted:'pill-amber',interview_scheduled:'pill-emerald',rejected:'pill-red',applied:'pill-muted'};
+    return `<span class="pill ${map[s]||'pill-muted'}">${s.replace('_',' ')}</span>`;
+  };
+  tbody.innerHTML = apps.map(a => `<tr>
+    <td style="font-weight:500">${a.company||'—'}</td>
+    <td style="color:#94a3b8">${a.job_title||'—'}</td>
+    <td><span class="pill pill-muted">${a.platform||'—'}</span></td>
+    <td>${statusPill(a.status||'applied')}</td>
+    <td style="color:var(--muted);font-family:var(--mono);font-size:10px">${(a.submitted_at||'').slice(0,10)||'—'}</td>
+    <td><a href="${a.url||'#'}" target="_blank" class="btn-ghost" style="font-size:9px;padding:3px 8px;text-decoration:none">View</a></td>
+  </tr>`).join('');
+}
+
+// ── Offers screen ─────────────────────────────────────────────────────────────
+async function loadOffers() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/offers`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  const offers = d.offers || [];
+  const cont = document.getElementById('offers-content');
+  if (!offers.length) {
+    cont.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><p>No offers yet</p></div>`;
+    return;
+  }
+  cont.innerHTML = offers.map(o => {
+    const rCol = o.risk_level==='high'?'var(--red)':o.risk_level==='medium'?'var(--amber)':'var(--emerald)';
+    const mvIcon = {accept:'✅',counter_again:'🔄',decline:'❌',request_time:'⏳'}[o.coaching_move]||'';
+    return `<div class="info-card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div><div style="font-size:15px;font-weight:700">${o.company}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${o.job_title}</div></div>
+        <span class="pill" style="background:rgba(239,68,68,.1);color:${rCol};border:1px solid ${rCol}33">${(o.risk_level||'—').toUpperCase()} RISK</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="info-card" style="margin:0;padding:10px"><div class="kv-key" style="font-size:9px">OFFERED CTC</div><div style="font-size:16px;font-weight:700;margin-top:4px">${o.total_ctc||'—'}</div></div>
+        <div class="info-card" style="margin:0;padding:10px"><div class="kv-key" style="font-size:9px">COUNTER ASK</div><div style="font-size:16px;font-weight:700;color:var(--cyan);margin-top:4px">${o.counter_ask||'—'}</div></div>
+        <div class="info-card" style="margin:0;padding:10px"><div class="kv-key" style="font-size:9px">WALK AWAY</div><div style="font-size:16px;font-weight:700;color:var(--red);margin-top:4px">${o.walk_away_floor||'—'}</div></div>
+      </div>
+      ${o.coaching_move ? `<div style="font-size:11px;color:var(--muted)">Coaching: ${mvIcon} <span style="color:var(--text)">${o.coaching_move.replace('_',' ').toUpperCase()}</span></div>` : ''}
+      ${o.script_path ? `<div style="margin-top:8px;font-size:10px;color:var(--muted)">Script: <span style="font-family:var(--mono);color:var(--cyan)">${o.script_path}</span></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function openOfferModal() { openModal('modal-offer'); }
+
+async function submitOffer() {
+  const body = {
+    thread_id:         currentThreadId,
+    company:           document.getElementById('of-company').value.trim(),
+    job_title:         document.getElementById('of-title').value.trim(),
+    offer_letter_text: document.getElementById('of-text').value.trim(),
+    deadline_date:     document.getElementById('of-deadline').value.trim() || null,
+  };
+  if (!body.company || !body.offer_letter_text) { alert('Company and offer text are required.'); return; }
+  closeModal('modal-offer');
+  moduleStates['offer'] = { status: 'running', ts: nowTs() };
+  loadDashboard();
+  const res = await fetch(`${API}/api/modules/offer`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const { job_id, thread_id } = await res.json();
+  if (!currentThreadId) { currentThreadId = thread_id; localStorage.setItem('jh_thread_id', thread_id); }
+  activeJobId = job_id;
+  prependLog(`[SYSTEM] Offer evaluation started — job ${job_id.slice(0,8)}…`);
+  pollJob(job_id, 'offer');
+}
+
+// ── Interview Prep screen ─────────────────────────────────────────────────────
+async function loadPrep() {
+  if (!currentThreadId) return;
+  const res = await fetch(`${API}/api/sessions/${currentThreadId}/prep`).catch(() => null);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  const sessions = d.sessions || [];
+  document.getElementById('prep-count').textContent = sessions.length;
+  const list = document.getElementById('interview-list');
+  list.innerHTML = '';
+  if (!sessions.length) {
+    list.innerHTML = `<div class="empty"><p>No prep sessions yet — click "+ New Prep"</p></div>`;
+    return;
+  }
+  sessions.forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'info-card';
+    card.style.cursor = 'pointer';
+    card.style.borderColor = i === 0 ? 'rgba(0,212,255,.3)' : '';
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600">${s.company}</div>
+        <span class="pill pill-emerald">${s.prep_date||''}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${s.role}</div>
+      <div style="display:flex;gap:5px">
+        <span class="pill pill-cyan">Q: ${s.question_count||'—'}</span>
+        ${s.cheat_sheet_path?`<span class="pill pill-emerald">Sheet ✓</span>`:''}
+      </div>`;
+    card.onclick = () => showQuickCard(s);
+    list.appendChild(card);
+  });
+  if (sessions[0]) showQuickCard(sessions[0]);
+}
+
+function showQuickCard(s) {
+  const qc = document.getElementById('quick-card');
+  qc.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:700">${s.company}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${s.role}</div>
+      </div>
+      <span class="pill pill-emerald">${s.prep_date||'—'}</span>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px">QUESTION BANK</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="pill pill-cyan">Technical · ${countQType(s,'technical')}</span>
+        <span class="pill pill-violet">Behavioral · ${countQType(s,'behavioral')}</span>
+        <span class="pill pill-amber">Sys Design · ${countQType(s,'system_design')}</span>
+        <span class="pill pill-muted">Company · ${countQType(s,'company_specific')}</span>
+      </div>
+    </div>
+    ${s.cheat_sheet_path?`
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:6px">OUTPUT FILES</div>
+      <div style="font-size:10px;font-family:var(--mono);color:var(--cyan);word-break:break-all">${s.cheat_sheet_path}</div>
+    </div>`:''}
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-run" style="flex:1" ${!s.cheat_sheet_path?'disabled':''} onclick="openFile('${s.cheat_sheet_path||''}')">↓ Cheat Sheet</button>
+      <button class="btn-run" style="flex:1" ${!s.quick_card_path?'disabled':''} onclick="openFile('${s.quick_card_path||''}')">↓ Quick Card</button>
+    </div>`;
+}
+
+function countQType(s, type) {
+  // Question counts are in s.question_count (total) — individual types not always stored
+  return s[type + '_count'] || '—';
+}
+
+function openFile(path) { if (path) window.open(`file://${path}`, '_blank'); }
+function exportAllPrep() { alert('Export: open the cheat sheet .md files from outputs/interview_prep/'); }
+
+function openPrepModal() { openModal('modal-prep'); }
+
+async function submitPrep() {
+  const body = {
+    thread_id:   currentThreadId,
+    company:     document.getElementById('pr-company').value.trim(),
+    role:        document.getElementById('pr-role').value.trim(),
+    company_url: document.getElementById('pr-url').value.trim(),
+    jd_text:     document.getElementById('pr-jd').value.trim(),
+  };
+  if (!body.company || !body.role || !body.jd_text) { alert('Company, role, and JD text are required.'); return; }
+  closeModal('modal-prep');
+  moduleStates['prep'] = { status: 'running', ts: nowTs() };
+  loadDashboard();
+  const res = await fetch(`${API}/api/modules/prep`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const { job_id, thread_id } = await res.json();
+  if (!currentThreadId) { currentThreadId = thread_id; localStorage.setItem('jh_thread_id', thread_id); }
+  activeJobId = job_id;
+  prependLog(`[SYSTEM] Interview prep started — job ${job_id.slice(0,8)}…`);
+  pollJob(job_id, 'prep');
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadSessionList();
+  if (currentThreadId) connectSSE(currentThreadId);
+  buildPipeline({});
+  buildModuleGrid({});
+})();
+</script>
+</body>
+</html>
