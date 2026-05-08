@@ -1,0 +1,47 @@
+{
+  "personal": {
+    "full_name": "Your Full Name",
+    "email": "your@email.com",
+    "phone": "+91-9876543210",
+    "location": "Bangalore, India",
+    "linkedin_url": "https://linkedin.com/in/yourhandle",
+    "github_url": "https://github.com/yourhandle",
+    "portfolio_url": ""
+  },
+  "summary": "Brief 2-3 sentence professional summary that will be tailored per application.",
+  "experience": [
+    {
+      "title": "Software Engineer",
+      "company": "XYZ Corp",
+      "start_date": "2022-06",
+      "end_date": "present",
+      "location": "Bangalore, India",
+      "highlights": [
+        "Built an internal ML pipeline that reduced inference latency by 40%",
+        "Led a team of 3 to migrate monolith to microservices on AWS ECS",
+        "Improved test coverage from 30% to 85% across the core backend"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "B.Tech Computer Science and Engineering",
+      "institution": "PES University",
+      "year": "2024",
+      "cgpa": "8.5"
+    }
+  ],
+  "skills": {
+    "languages": ["Python", "JavaScript", "TypeScript"],
+    "frameworks": ["FastAPI", "LangChain", "LangGraph", "React"],
+    "tools": ["Docker", "Git", "Playwright", "PostgreSQL", "Redis"],
+    "cloud": ["AWS", "GCP"],
+    "ai_ml": ["Claude API", "OpenAI API", "Hugging Face", "scikit-learn"]
+  },
+  "certifications": [
+    "AWS Certified Solutions Architect – Associate"
+  ],
+  "total_experience_years": 2,
+  "notice_period_days": 30,
+  "expected_salary": "20 LPA"
+}

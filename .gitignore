@@ -1,0 +1,38 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Outputs & memory (contain personal data)
+outputs/
+memory/
+!memory/.gitkeep
+!outputs/.gitkeep
+
+# User profile with real personal data (keep only the example)
+user_data/profile.json
+
+# LangGraph checkpoints
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright
+playwright/.auth/
