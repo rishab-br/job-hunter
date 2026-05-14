@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional
 from backend.models import NewSessionRequest
 from backend import runner
 from state import initial_state
@@ -8,22 +9,43 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions():
-    """List all saved sessions (most-recent first)."""
-    return runner.list_sessions()
+async def list_sessions(user_id: Optional[str] = Query(None)):
+    """List sessions for a user (filtered by user_id when provided)."""
+    return runner.list_sessions(user_id=user_id)
 
 
 @router.post("")
 async def create_session(req: NewSessionRequest):
-    """Create a blank session and return the thread_id."""
+    """Create a blank session. Resolves github_username from user_id when OAuth is active."""
+    github_username = req.github_username
+    github_token = None
+
+    if req.user_id:
+        from backend.supabase_client import get_supabase
+        sb = get_supabase()
+        if sb is not None:
+            result = (
+                sb.table("users")
+                .select("github_username, github_token")
+                .eq("id", req.user_id)
+                .execute()
+            )
+            if result.data:
+                github_username = result.data[0]["github_username"]
+                github_token = result.data[0]["github_token"]
+
+    if not github_username:
+        raise HTTPException(400, "github_username required (or connect GitHub via OAuth)")
+
     thread_id = str(uuid.uuid4())
-    state = initial_state(
-        github_username=req.github_username,
+    state = dict(initial_state(
+        github_username=github_username,
         target_role=req.target_role,
         target_market=req.target_market,
         target_niche=req.target_niche,
-    )
-    runner.save_session(thread_id, state)
+    ))
+    state["github_token"] = github_token
+    runner.save_session(thread_id, state, user_id=req.user_id)
     return {"thread_id": thread_id, **state}
 
 
@@ -44,8 +66,7 @@ async def get_summary(thread_id: str):
         raise HTTPException(404, f"Session '{thread_id}' not found")
 
     scored = state.get("scored_jobs") or []
-    apps = state.get("applications") or []
-    statuses = state.get("application_statuses") or {}
+    apps   = state.get("applications") or []
 
     return {
         "thread_id":       thread_id,
@@ -54,7 +75,6 @@ async def get_summary(thread_id: str):
         "current_phase":   state.get("current_phase", "idle"),
         "logs":            (state.get("logs") or [])[-50:],
 
-        # Quick stats
         "jobs_found":      len(state.get("discovered_jobs") or []),
         "jobs_high_fit":   sum(1 for j in scored if j.get("relevance_score", 0) >= 75),
         "apps_submitted":  len(apps),
@@ -62,10 +82,9 @@ async def get_summary(thread_id: str):
         "prep_sessions":   len(state.get("interview_prep_sessions") or []),
         "ghosted":         len(state.get("ghosted_applications") or []),
 
-        # Module last-run signals
-        "has_audit":       bool(state.get("github_audit")),
-        "has_jobs":        bool(state.get("discovered_jobs")),
-        "has_apps":        bool(apps),
-        "has_offers":      bool(state.get("active_offers")),
-        "has_prep":        bool(state.get("interview_prep_sessions")),
+        "has_audit":  bool(state.get("github_audit")),
+        "has_jobs":   bool(state.get("discovered_jobs")),
+        "has_apps":   bool(apps),
+        "has_offers": bool(state.get("active_offers")),
+        "has_prep":   bool(state.get("interview_prep_sessions")),
     }

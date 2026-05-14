@@ -19,9 +19,10 @@ def run(state: GlobalState) -> GlobalState:
     ranked = sorted(repos, key=repo_priority, reverse=True)[:MAX_REPOS_TO_ANALYZE]
 
     # Enrich top repos with README content
+    token = state.get("github_token")
     enriched = []
     for r in ranked:
-        readme = github_tools.get_readme_content(username, r["name"])
+        readme = github_tools.get_readme_content(username, r["name"], token=token)
         readme_len = len(readme) if readme else 0
         enriched.append({
             **r,

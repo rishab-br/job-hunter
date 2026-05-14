@@ -238,6 +238,24 @@
         Interview Prep
       </div>
     </nav>
+    <!-- GitHub auth chip -->
+    <div id="auth-area" style="padding:10px 16px;border-top:1px solid var(--border)">
+      <div id="auth-logged-out" style="display:none">
+        <a href="/auth/github" style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:6px;border:1px solid var(--border-hi);background:rgba(255,255,255,.03);color:var(--text);text-decoration:none;font-size:11px;cursor:pointer;transition:all .15s">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Connect GitHub
+        </a>
+      </div>
+      <div id="auth-logged-in" style="display:none;align-items:center;gap:8px">
+        <img id="auth-avatar" src="" width="24" height="24" style="border-radius:50%;border:1px solid var(--border-hi)" />
+        <div style="flex:1;min-width:0">
+          <div id="auth-username" style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div style="font-size:9px;color:var(--emerald)">● Connected</div>
+        </div>
+        <button onclick="logout()" style="background:none;border:none;color:var(--muted);font-size:9px;cursor:pointer;padding:2px 4px" title="Disconnect">✕</button>
+      </div>
+    </div>
+
     <div class="session-area">
       <div class="session-label">Session</div>
       <select class="session-select" id="session-select">
@@ -406,8 +424,15 @@
 <div class="modal-overlay" id="modal-new-session">
   <div class="modal">
     <div class="modal-title">New Session</div>
-    <label>GITHUB USERNAME</label>
-    <input type="text" id="ns-username" placeholder="johndoe" />
+    <!-- Shown only when not connected via OAuth -->
+    <div id="ns-username-row">
+      <label>GITHUB USERNAME</label>
+      <input type="text" id="ns-username" placeholder="johndoe" />
+    </div>
+    <!-- Shown when connected via OAuth -->
+    <div id="ns-oauth-row" style="display:none;padding:8px 10px;border-radius:5px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);margin-bottom:10px;font-size:11px;color:var(--emerald)">
+      ✓ GitHub connected as <strong id="ns-oauth-username"></strong>
+    </div>
     <label>TARGET ROLE</label>
     <input type="text" id="ns-role" placeholder="AI Engineer" />
     <label>TARGET MARKET</label>
@@ -471,6 +496,54 @@ let activeJobId = null;
 let sseSource = null;
 let moduleStates = {};   // module -> {status, metric, metricLabel, ts}
 
+// ── Auth state ────────────────────────────────────────────────────────────────
+// Populated after GitHub OAuth redirect or from localStorage
+let authUserId   = localStorage.getItem('jh_user_id')   || null;
+let authUsername = localStorage.getItem('jh_username')  || null;
+let authAvatar   = localStorage.getItem('jh_avatar')    || null;
+
+function initAuth() {
+  // Check if we're landing back from GitHub OAuth (URL params set by /auth/callback)
+  const params = new URLSearchParams(window.location.search);
+  const uid = params.get('user_id');
+  if (uid) {
+    authUserId   = uid;
+    authUsername = params.get('username') || '';
+    authAvatar   = params.get('avatar')   || '';
+    localStorage.setItem('jh_user_id',  authUserId);
+    localStorage.setItem('jh_username', authUsername);
+    localStorage.setItem('jh_avatar',   authAvatar);
+    // Clean URL so refreshing doesn't re-process params
+    window.history.replaceState({}, '', '/');
+  }
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const loggedIn  = document.getElementById('auth-logged-in');
+  const loggedOut = document.getElementById('auth-logged-out');
+  if (authUserId) {
+    loggedOut.style.display = 'none';
+    loggedIn.style.display  = 'flex';
+    document.getElementById('auth-avatar').src         = authAvatar || '';
+    document.getElementById('auth-username').textContent = authUsername || '';
+  } else {
+    loggedOut.style.display = 'block';
+    loggedIn.style.display  = 'none';
+  }
+}
+
+function logout() {
+  authUserId = authUsername = authAvatar = null;
+  localStorage.removeItem('jh_user_id');
+  localStorage.removeItem('jh_username');
+  localStorage.removeItem('jh_avatar');
+  localStorage.removeItem('jh_thread_id');
+  currentThreadId = null;
+  updateAuthUI();
+  resetDashboard();
+}
+
 // ── Navigation ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => {
@@ -495,7 +568,10 @@ function showScreen(name) {
 
 // ── Sessions ─────────────────────────────────────────────────────────────────
 async function loadSessionList() {
-  const res = await fetch(`${API}/api/sessions`).catch(() => null);
+  const url = authUserId
+    ? `${API}/api/sessions?user_id=${authUserId}`
+    : `${API}/api/sessions`;
+  const res = await fetch(url).catch(() => null);
   if (!res || !res.ok) return;
   const sessions = await res.json();
   const sel = document.getElementById('session-select');
@@ -524,17 +600,39 @@ document.getElementById('session-select').addEventListener('change', function() 
   }
 });
 
-function openNewSession() { openModal('modal-new-session'); }
+function openNewSession() {
+  // Show/hide the right username row based on auth state
+  const oauthRow    = document.getElementById('ns-oauth-row');
+  const usernameRow = document.getElementById('ns-username-row');
+  if (authUserId && authUsername) {
+    oauthRow.style.display    = 'block';
+    usernameRow.style.display = 'none';
+    document.getElementById('ns-oauth-username').textContent = authUsername;
+  } else {
+    oauthRow.style.display    = 'none';
+    usernameRow.style.display = 'block';
+  }
+  openModal('modal-new-session');
+}
 
 async function createSession() {
-  const body = {
-    github_username: document.getElementById('ns-username').value.trim(),
-    target_role:     document.getElementById('ns-role').value.trim(),
-    target_market:   document.getElementById('ns-market').value.trim() || 'India',
-    target_niche:    document.getElementById('ns-niche').value.trim(),
-  };
-  if (!body.github_username || !body.target_role) { alert('Username and role are required.'); return; }
-  const res = await fetch(`${API}/api/sessions`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const target_role   = document.getElementById('ns-role').value.trim();
+  const target_market = document.getElementById('ns-market').value.trim() || 'India';
+  const target_niche  = document.getElementById('ns-niche').value.trim();
+
+  let body;
+  if (authUserId) {
+    // OAuth path — backend resolves username from Supabase
+    if (!target_role) { alert('Target role is required.'); return; }
+    body = { user_id: authUserId, target_role, target_market, target_niche };
+  } else {
+    // Manual path — user typed their username
+    const github_username = document.getElementById('ns-username').value.trim();
+    if (!github_username || !target_role) { alert('Username and role are required.'); return; }
+    body = { github_username, target_role, target_market, target_niche };
+  }
+
+  const res  = await fetch(`${API}/api/sessions`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const data = await res.json();
   currentThreadId = data.thread_id;
   localStorage.setItem('jh_thread_id', currentThreadId);
@@ -674,9 +772,13 @@ async function runModule(key) {
   }[key];
   if (!endpoint) return;
 
+  // Always include user_id when logged in via OAuth
   let body = { thread_id: currentThreadId };
-  // For github, pull username from session
-  if (key === 'github') {
+  if (authUserId) {
+    body.user_id = authUserId;
+  }
+  // For github without OAuth, still need username from session
+  if (key === 'github' && !authUserId) {
     const sess = await fetch(`${API}/api/sessions/${currentThreadId}`).then(r => r.json()).catch(() => ({}));
     body.github_username = sess.github_username || '';
     body.target_role     = sess.target_role || '';
@@ -1055,7 +1157,8 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
-  await loadSessionList();
+  initAuth();               // Handle OAuth redirect + restore auth from localStorage
+  await loadSessionList();  // Now filtered by user_id if logged in
   if (currentThreadId) connectSSE(currentThreadId);
   buildPipeline({});
   buildModuleGrid({});

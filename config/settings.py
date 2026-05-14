@@ -12,9 +12,17 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-2.5-flash"
 
-    # GitHub
-    github_token: str
+    # GitHub OAuth App (for multi-user frontend auth)
+    github_client_id: str = ""
+    github_client_secret: str = ""
+
+    # GitHub PAT (CLI / dev fallback — not needed when OAuth is active)
+    github_token: str = ""
     github_username: str = ""
+
+    # Supabase (multi-user session storage)
+    supabase_url: str = ""
+    supabase_key: str = ""
 
     # Job platforms
     linkedin_email: str = ""
@@ -22,7 +30,7 @@ class Settings(BaseSettings):
     indeed_email: str = ""
     indeed_password: str = ""
 
-    # Target profile
+    # Target profile defaults
     target_role: str = ""
     target_market: str = ""
     target_niche: str = ""

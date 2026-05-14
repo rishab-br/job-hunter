@@ -9,6 +9,9 @@ uvicorn[standard]>=0.29.0
 # ── GitHub Integration ─────────────────────────────────────────────────────────
 PyGithub>=2.1.1
 
+# ── Supabase (multi-user session + auth storage) ────────────────────────────────
+supabase>=2.0.0
+
 # ── Browser Automation ─────────────────────────────────────────────────────────
 playwright>=1.40.0
 

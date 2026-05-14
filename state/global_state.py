@@ -25,6 +25,7 @@ class GlobalState(TypedDict):
     active_lead: Optional[str]
     errors: list[str]
     logs: list[str]
+    github_token: Optional[str]       # OAuth token for this user (not committed)
 
     # ── GitHub Intelligence ────────────────────────────────────────────────────
     github_profile: Optional[dict[str, Any]]
@@ -76,6 +77,7 @@ def initial_state(
         active_lead=None,
         errors=[],
         logs=[],
+        github_token=None,
         github_profile=None,
         github_repos=None,
         github_audit=None,

@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import runner
-from backend.routes import sessions, modules, data, stream
+from backend.routes import sessions, modules, data, stream, auth
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -51,6 +51,7 @@ app.add_middleware(
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+app.include_router(auth.router)
 app.include_router(sessions.router)
 app.include_router(modules.router)
 app.include_router(data.router)

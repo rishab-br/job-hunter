@@ -8,8 +8,9 @@ def run(state: GlobalState) -> GlobalState:
     logs = list(state.get("logs") or [])
     logs.append("[profile_auditor] Fetching GitHub profile and repos...")
 
-    profile = github_tools.get_profile(username)
-    repos = github_tools.get_repos(username)
+    token = state.get("github_token")
+    profile = github_tools.get_profile(username, token=token)
+    repos = github_tools.get_repos(username, token=token)
 
     # Compute derived stats locally
     active_repos = [

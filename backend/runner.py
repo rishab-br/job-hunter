@@ -6,6 +6,7 @@ Architecture:
 - Each thread pushes log lines to asyncio.Queue instances via call_soon_threadsafe().
 - SSE endpoints are async generators that consume from those queues.
 - One queue per (thread_id, subscriber) — supports multiple browser tabs.
+- Sessions persist to Supabase when configured, else falls back to local JSON files.
 """
 import asyncio
 import json
@@ -38,9 +39,20 @@ def register_loop(loop: asyncio.AbstractEventLoop) -> None:
     _main_loop = loop
 
 
-# ── Session I/O ───────────────────────────────────────────────────────────────
+# ── Session I/O (Supabase primary, file fallback) ─────────────────────────────
 
-def save_session(thread_id: str, state: dict) -> None:
+def save_session(thread_id: str, state: dict, user_id: str = None) -> None:
+    from backend.supabase_client import get_supabase
+    sb = get_supabase()
+    if sb is not None:
+        sb.table("job_sessions").upsert({
+            "thread_id": thread_id,
+            "user_id":   user_id,
+            "state":     state,
+        }).execute()
+        return
+
+    # ── File fallback ──────────────────────────────────────────────────────────
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     path = SESSION_DIR / f"{thread_id}.json"
     safe = {}
@@ -54,18 +66,51 @@ def save_session(thread_id: str, state: dict) -> None:
 
 
 def load_session(thread_id: str) -> Optional[dict]:
+    from backend.supabase_client import get_supabase
+    sb = get_supabase()
+    if sb is not None:
+        result = sb.table("job_sessions").select("state").eq("thread_id", thread_id).execute()
+        if result.data:
+            return result.data[0]["state"]
+        return None
+
+    # ── File fallback ──────────────────────────────────────────────────────────
     path = SESSION_DIR / f"{thread_id}.json"
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def list_sessions() -> List[dict]:
+def list_sessions(user_id: str = None) -> List[dict]:
+    from backend.supabase_client import get_supabase
+    sb = get_supabase()
+    if sb is not None:
+        query = sb.table("job_sessions").select("thread_id, state, updated_at")
+        if user_id:
+            query = query.eq("user_id", user_id)
+        result = query.order("updated_at", desc=True).execute()
+        out = []
+        for row in result.data:
+            d = row.get("state") or {}
+            out.append({
+                "thread_id":       row["thread_id"],
+                "github_username": d.get("github_username", ""),
+                "target_role":     d.get("target_role", ""),
+                "target_market":   d.get("target_market", ""),
+                "current_phase":   d.get("current_phase", "idle"),
+                "jobs_found":      len(d.get("discovered_jobs") or []),
+                "apps_submitted":  len(d.get("applications") or []),
+                "offers":          len(d.get("active_offers") or []),
+                "prep_sessions":   len(d.get("interview_prep_sessions") or []),
+            })
+        return out
+
+    # ── File fallback ──────────────────────────────────────────────────────────
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     out = []
     for p in sorted(SESSION_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
         try:
-            d = json.loads(p.read_text(encoding="utf-8"))
+            d = json.loads(p.read_text(encoding="utf-8-sig"))
             out.append({
                 "thread_id":       p.stem,
                 "github_username": d.get("github_username", ""),
@@ -85,7 +130,6 @@ def list_sessions() -> List[dict]:
 # ── SSE pub/sub ───────────────────────────────────────────────────────────────
 
 def _push(thread_id: str, message: str) -> None:
-    """Called from a background thread — thread-safe push to all SSE queues."""
     if _main_loop is None or _main_loop.is_closed():
         return
     for q in _subscribers.get(thread_id, []):
@@ -107,7 +151,6 @@ def unsubscribe(thread_id: str, q: asyncio.Queue) -> None:
 
 
 async def log_stream(thread_id: str) -> AsyncGenerator[str, None]:
-    """Async generator yielding log lines as SSE data strings."""
     q = subscribe(thread_id)
     try:
         while True:
@@ -126,21 +169,32 @@ def get_job(job_id: str) -> Optional[dict]:
     return _jobs.get(job_id)
 
 
-def submit_job(thread_id: str, module: str, state: dict, extra: dict = None) -> str:
+def submit_job(
+    thread_id: str,
+    module: str,
+    state: dict,
+    extra: dict = None,
+    user_id: str = None,
+) -> str:
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"status": "queued", "thread_id": thread_id, "error": None}
-    _executor.submit(_worker, job_id, thread_id, module, state, extra or {})
+    _executor.submit(_worker, job_id, thread_id, module, state, extra or {}, user_id)
     return job_id
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 
-def _worker(job_id: str, thread_id: str, module: str, state: dict, extra: dict) -> None:
-    """Runs inside a thread. Streams log lines via _push(), saves final state."""
+def _worker(
+    job_id: str,
+    thread_id: str,
+    module: str,
+    state: dict,
+    extra: dict,
+    user_id: str = None,
+) -> None:
     try:
         _jobs[job_id]["status"] = "running"
 
-        # Late imports keep the main thread fast
         from orchestrator.master import compile_graph
         from state import SystemPhase
         from orchestrator import inject_interview_target
@@ -155,7 +209,6 @@ def _worker(job_id: str, thread_id: str, module: str, state: dict, extra: dict) 
             "interview_prep": SystemPhase.INTERVIEW_PREP,
         }
 
-        # Apply injections before routing
         if module == "offer":
             state = _inject_offer(
                 state,
@@ -182,7 +235,6 @@ def _worker(job_id: str, thread_id: str, module: str, state: dict, extra: dict) 
         prev_log_count = len(state.get("logs") or [])
         final_state = dict(state)
 
-        # Stream node-by-node — push new log lines as each node completes
         for chunk in graph.stream(state, config=config, stream_mode="updates"):
             for _node, node_state in chunk.items():
                 if not isinstance(node_state, dict):
@@ -193,12 +245,12 @@ def _worker(job_id: str, thread_id: str, module: str, state: dict, extra: dict) 
                 prev_log_count = len(current_logs)
                 final_state.update(node_state)
 
-        save_session(thread_id, final_state)
+        save_session(thread_id, final_state, user_id=user_id)
         _push(thread_id, f"__DONE__{job_id}")
         _jobs[job_id]["status"] = "done"
 
     except Exception as exc:
-        err = f"{exc}\n{traceback.format_exc()}"
         _push(thread_id, f"[ERROR] {exc}")
         _push(thread_id, f"__ERROR__{job_id}")
         _jobs[job_id].update({"status": "failed", "error": str(exc)})
+        traceback.print_exc()

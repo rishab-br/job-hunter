@@ -3,7 +3,8 @@ from typing import Optional
 
 
 class NewSessionRequest(BaseModel):
-    github_username: str
+    user_id: Optional[str] = None       # From GitHub OAuth (looks up username automatically)
+    github_username: str = ""            # Fallback when OAuth not configured
     target_role: str
     target_market: str = "India"
     target_niche: str = ""
@@ -11,18 +12,21 @@ class NewSessionRequest(BaseModel):
 
 class RunGithubRequest(BaseModel):
     thread_id: Optional[str] = None
-    github_username: str
-    target_role: str
+    user_id: Optional[str] = None       # When provided, token is looked up from Supabase
+    github_username: str = ""            # Fallback
+    target_role: str = ""
     target_market: str = "India"
     target_niche: str = ""
 
 
 class RunModuleRequest(BaseModel):
     thread_id: str
+    user_id: Optional[str] = None
 
 
 class RunDiscoveryRequest(BaseModel):
     thread_id: str
+    user_id: Optional[str] = None
     target_role: Optional[str] = None
     target_market: Optional[str] = None
     target_niche: Optional[str] = None
@@ -30,6 +34,7 @@ class RunDiscoveryRequest(BaseModel):
 
 class RunPrepRequest(BaseModel):
     thread_id: Optional[str] = None
+    user_id: Optional[str] = None
     github_username: str = ""
     target_role: str = ""
     target_market: str = "India"
@@ -43,6 +48,7 @@ class RunPrepRequest(BaseModel):
 
 class InjectOfferRequest(BaseModel):
     thread_id: Optional[str] = None
+    user_id: Optional[str] = None
     github_username: str = ""
     target_role: str = ""
     target_market: str = "India"
