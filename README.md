@@ -1,150 +1,160 @@
-```markdown
-# JobHunter 
+<div align="center">
 
-> An end-to-end AI-powered job hunting system built on a hierarchical multi-agent architecture.
-> From GitHub portfolio analysis to offer negotiation — fully orchestrated, human-in-the-loop.
+<br/>
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://python.org)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange)](https://langchain-ai.github.io/langgraph/)
-[![Claude](https://img.shields.io/badge/Claude-Anthropic-blueviolet)](https://anthropic.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+<img src="https://img.shields.io/badge/⚡-JobHunter-00D4FF?style=for-the-badge&labelColor=0D1117&color=00D4FF" height="42"/>
+
+### Hierarchical multi-agent job hunting system — portfolio audit to offer negotiation, fully orchestrated.
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-FF6B35?style=flat-square)](https://langchain-ai.github.io/langgraph/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React_18-Dashboard-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Playwright](https://img.shields.io/badge/Playwright-Scraping-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
+
+<br/>
+
+</div>
 
 ---
 
 ## What is this?
 
-JobHunter is a sophisticated agentic AI system that handles every stage of the job search process:
-
-1. **Audits your GitHub portfolio** and tells you exactly what to build or fix to attract recruiters for your target role
-2. **Discovers and scores job listings** across LinkedIn, Indeed, and Naukri against your actual profile
-3. **Tailors your resume and cover letter** per job, fills application forms, and waits for your approval before submitting
-4. **Tracks all applications** — monitors status changes, drafts follow-ups, flags ghosted companies
-5. **Evaluates job offers** — benchmarks CTC against market data, flags risky clauses, computes a counter-offer, and generates a full negotiation script
-
----
-
-## Architecture
-
-The system is built as a **hierarchical multi-agent pipeline** using LangGraph's stateful graph framework.
-
-### Master Orchestrator
-Routes between all Lead Agents using a single `GlobalState` TypedDict and `current_phase` enum. Compiled with `MemorySaver` checkpointing for interrupt/resume support.
-
----
-
-### GitHub Intelligence Lead
-| Worker | What it does |
-|---|---|
-| Profile Auditor | GitHub API → profile snapshot, bio quality, activity score |
-| Project Depth Analyzer | Per-repo: README quality, stack, recency, completeness score |
-| Trend Scout | Claude → must-have skills and hot project types for target role/niche |
-| Gap Analyzer | Profile vs. market trends → severity-rated gap report |
-| Improvement Planner | Prioritised action plan → saved to `outputs/github_intelligence/` |
-
----
-
-### Job Discovery Lead
-| Worker | What it does |
-|---|---|
-| LinkedIn Scraper | Playwright → login → search → extract up to 25 listings with full JD |
-| Indeed Scraper | Playwright → search (no login required) → paginate → 25 listings |
-| Naukri Scraper | Playwright → role+location URL → open each job → 25 listings |
-| JD Analyzer | Claude → extracts skills, seniority, red flags, company signals per JD |
-| Relevance Scorer | Claude → 0–100 match score against your profile, ranked |
-
----
-
-### Application Engine Lead
-| Worker | What it does |
-|---|---|
-| Resume Tailor | Claude → JD-mirrored resume per job → `outputs/resumes/` |
-| Cover Letter Writer | Claude → role + company-specific letter → `outputs/cover_letters/` |
-| Form Filler | Playwright → fills all fields, takes screenshot — does NOT submit |
-| **Human Approval Gate** | **LangGraph `interrupt()` — YOU review resume + letter + screenshot before anything is submitted** |
-| Submission Executor | Playwright → clicks Submit only after explicit human approval |
-
----
-
-### Status Tracker Lead
-| Worker | What it does |
-|---|---|
-| Application Monitor | Playwright → polls LinkedIn/Indeed for status changes on submitted apps |
-| Follow-up Scheduler | Claude → drafts follow-up emails for apps silent 7+ days |
-| Ghosted Detector | Flags applications with no movement after 21 days |
-| Pipeline Reporter | Weekly markdown digest → `outputs/reports/pipeline_<date>.md` |
-
----
-
-### Offer Intelligence Lead
-| Worker | What it does |
-|---|---|
-| Offer Parser | Claude → extracts every CTC component from the offer letter |
-| Market Benchmarker | AmbitionBox scrape + Claude → P25/P50/P75/P90 for role/market |
-| Clause Risk Analyzer | Claude → NCA, IP assignment, clawback, notice period risk ratings |
-| Counter-offer Calculator | Claude → specific ask number + walk-away floor + justification points |
-| Negotiation Script Gen | Claude → email + phone + pushback scripts → `outputs/negotiation/` |
-| Response Coach | Claude → analyzes employer's reply, recommends accept/counter/decline |
-
----
-
-### State Flow
+JobHunter is a production-grade agentic AI system that handles the entire job search lifecycle as a stateful, resumable pipeline. Each stage is an independent **Lead Agent** with its own worker graph — they share a single `GlobalState` and are orchestrated by a **Master Orchestrator** built on LangGraph.
 
 ```
-User sets target role + market
-         │
-         ▼
-GitHub Intelligence  →  portfolio audit + improvement plan
-         │
-         ▼
-Job Discovery        →  scored, ranked job list
-         │
-         ▼
-Application Engine   →  tailored docs → HUMAN APPROVAL → submission
-         │
-         ▼
-Status Tracker       →  continuous monitoring (runs periodically)
-         │
-         ▼
-Offer Intelligence   →  triggered when an offer arrives
+GitHub Portfolio Audit  →  Job Discovery  →  Application Engine  →  Status Tracking  →  Offer Intelligence
+       ↑                                             ↑
+  Improvement Plan                         Human Approval Gate
+  (10 prioritised actions)                 (LangGraph interrupt())
 ```
+
+> **No application is ever submitted without your explicit approval.** The human-in-the-loop gate is a first-class LangGraph `interrupt()`, not a workaround.
+
+---
+
+## Agent Architecture
+
+<details open>
+<summary><b>🔬 GitHub Intelligence Lead</b> — Portfolio audit &amp; gap analysis</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **Profile Auditor** | GitHub API → bio quality, activity score, language breakdown, 0–100 profile score |
+| **Project Depth Analyzer** | Per-repo: README quality, tech stack detection, recency, completeness score |
+| **Trend Scout** | LLM → must-have skills + hot project types for your target role &amp; niche |
+| **Gap Analyzer** | Profile vs. market trends → severity-rated gap report (high / medium / low) |
+| **Improvement Planner** | Prioritised 10-action plan → `outputs/github_intelligence/improvement_plan_<date>.md` |
+
+</details>
+
+<details>
+<summary><b>🔍 Job Discovery Lead</b> — Multi-platform scraping &amp; scoring</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **LinkedIn Scraper** | Playwright → authenticated search → up to 25 listings with full JD |
+| **Indeed Scraper** | Playwright → no login required → paginate across 3 pages → 25 listings |
+| **Naukri Scraper** | Playwright → SEO URL + query-param fallback → new-tab JD extraction |
+| **JD Analyzer** | LLM → extracts must-have skills, seniority, red flags, company signals per JD |
+| **Relevance Scorer** | LLM → 0–100 match score against your full profile, sorted &amp; prioritised |
+
+</details>
+
+<details>
+<summary><b>📄 Application Engine Lead</b> — Tailored docs + human-approved submission</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **Resume Tailor** | LLM → ATS-optimised resume mirroring the JD → `outputs/resumes/` |
+| **Cover Letter Writer** | LLM → role + company-specific 3-paragraph letter → `outputs/cover_letters/` |
+| **Form Filler** | Playwright → fills every field on LinkedIn / Indeed / Naukri, takes screenshot |
+| **⚠️ Human Approval Gate** | `LangGraph interrupt()` — pipeline pauses, you review docs + screenshot before anything is submitted |
+| **Submission Executor** | Playwright → clicks Submit *only* after your explicit approval |
+
+</details>
+
+<details>
+<summary><b>📊 Status Tracker Lead</b> — Application monitoring &amp; follow-ups</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **Application Monitor** | Playwright → polls LinkedIn/Indeed for status changes on submitted apps |
+| **Follow-up Scheduler** | LLM → drafts follow-up emails for apps silent for 7+ days |
+| **Ghosted Detector** | Flags applications with zero movement after 21 days |
+| **Pipeline Reporter** | Weekly markdown digest → `outputs/reports/pipeline_<date>.md` |
+
+</details>
+
+<details>
+<summary><b>💰 Offer Intelligence Lead</b> — CTC benchmarking &amp; negotiation</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **Offer Parser** | LLM → extracts every CTC component (base, bonus, equity, benefits) |
+| **Market Benchmarker** | AmbitionBox scrape + LLM → P25/P50/P75/P90 bands for your role &amp; market |
+| **Clause Risk Analyzer** | LLM → NCA, IP assignment, clawback, notice period — severity-rated |
+| **Counter-offer Calculator** | LLM → specific ask number + walk-away floor + 5 justification points |
+| **Negotiation Script Gen** | LLM → email + phone scripts + pushback handling → `outputs/negotiation/` |
+| **Response Coach** | LLM → analyzes employer's reply → recommends accept / counter / decline |
+
+</details>
+
+<details>
+<summary><b>🎤 Interview Prep Lead</b> — Role-specific cheat sheets</summary>
+
+| Worker | What it does |
+|--------|-------------|
+| **JD Decoder** | LLM → surfaces hidden requirements, culture signals, likely interview focus |
+| **Company Researcher** | Fetches company website → talking points, smart questions to ask |
+| **Question Generator** | LLM → 8–10 technical + 2–3 system design + 6–8 behavioral + company-specific |
+| **Answer Crafter** | LLM → STAR-format answers, system design frameworks, technical walkthroughs |
+| **Cheat Sheet Builder** | Assembles full cheat sheet + 5-min quick card → `outputs/interview_prep/` |
+
+</details>
 
 ---
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|---|---|
-| Human-in-the-loop before every submission | Avoids ToS issues with job platforms; deliberate design choice |
-| LangGraph `interrupt()` for the approval gate | Graph pauses mid-execution and resumes on human input — not a workaround, it's idiomatic LangGraph |
-| Single `GlobalState` TypedDict | All subgraphs share the same schema; the Master Orchestrator routes on `current_phase` |
-| Dedicated skills layer | Workers never import Playwright or GitHub API directly — all external calls go through `skills/` |
-| JSON session persistence | Thread IDs map to `memory/sessions/<id>.json` — resume any session across restarts |
+| Decision | Why |
+|----------|-----|
+| `LangGraph interrupt()` for approval | Graph pauses mid-execution, checkpointed to disk — resumes exactly where it stopped across server restarts |
+| Single `GlobalState` TypedDict | All 6 lead agents and 30+ workers share one schema; the Master Orchestrator routes on `current_phase` |
+| Standalone subgraph execution | Individual module runs bypass the master graph — prevents unintended cascading to downstream phases |
+| Dedicated `skills/` layer | Workers never import Playwright or the GitHub API directly — all I/O goes through `skills/` |
+| Groq primary, Gemini fallback | Groq's Llama 3.3 70B is fast and cheap for structured extraction; Gemini 2.5 Flash handles JSON-mode fallback |
+| FastAPI + SSE streaming | Backend streams agent log lines to the React dashboard in real time via Server-Sent Events |
 
 ---
 
 ## Agent Types Demonstrated
 
-| Agent Type | Where in the system |
-|---|---|
-| Reactive | Form Filler, Submission Executor |
-| Model-based | Status Tracker, Pipeline Reporter |
-| Goal-based | Resume Tailor, Application Engine |
-| Utility-based | Relevance Scorer, Clause Risk Analyzer |
-| Learning | Improvement Planner (learns from which applications get responses) |
+| Type | Where in the system |
+|------|-------------------|
+| **Reactive** | Form Filler, Submission Executor |
+| **Model-based** | Status Tracker, Application Monitor |
+| **Goal-based** | Resume Tailor, Application Engine Lead |
+| **Utility-based** | Relevance Scorer, Clause Risk Analyzer |
+| **Learning** | Improvement Planner — adapts plan based on which applications generate responses |
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
-| Agent framework | [LangGraph](https://langchain-ai.github.io/langgraph/) |
-| LLM | [Claude (Anthropic)](https://anthropic.com) via `anthropic` SDK |
-| Browser automation | [Playwright](https://playwright.dev/) |
-| GitHub data | [PyGithub](https://pygithub.readthedocs.io/) |
-| HTTP client | [httpx](https://www.python-httpx.org/) |
+|-------|-----------|
+| Agent framework | [LangGraph](https://langchain-ai.github.io/langgraph/) — StateGraph, subgraphs, MemorySaver |
+| LLM routing | [Groq](https://groq.com) (Llama 3.3 70B) + [Gemini](https://ai.google.dev) (2.5 Flash) fallback |
+| Browser automation | [Playwright](https://playwright.dev/) — anti-detection, multi-tab, screenshot |
+| Backend | [FastAPI](https://fastapi.tiangolo.com) + SSE streaming |
+| Frontend | [React 18](https://react.dev) + TypeScript + [Vite](https://vitejs.dev) + [Tailwind CSS](https://tailwindcss.com) |
+| GitHub data | [PyGithub](https://pygithub.readthedocs.io/) + GitHub OAuth |
+| Auth + storage | [Supabase](https://supabase.com) (multi-user) with local JSON fallback |
 | Config | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
-| CLI output | [rich](https://rich.readthedocs.io/) |
 | Language | Python 3.11+ |
 
 ---
@@ -153,42 +163,44 @@ Offer Intelligence   →  triggered when an offer arrives
 
 ```
 JobHunter/
-├── main.py                          # CLI entry point (6 subcommands)
-├── pyproject.toml
-├── .env.example
-├── state/
-│   └── global_state.py              # GlobalState TypedDict + SystemPhase enum
-├── orchestrator/
-│   └── master.py                    # Master Orchestrator — routing, compile, run helpers
+├── main.py                          # CLI entry point (7 subcommands)
+├── state/global_state.py            # GlobalState TypedDict + SystemPhase enum
+├── orchestrator/master.py           # Master Orchestrator — routing, compile, interrupt/resume
+│
 ├── agents/
-│   ├── github_intelligence/lead.py + workers/
-│   ├── job_discovery/lead.py + workers/platform_scrapers/
-│   ├── application_engine/lead.py + workers/
-│   ├── status_tracker/lead.py + workers/
-│   └── offer_intelligence/lead.py + workers/
+│   ├── github_intelligence/         # Lead + 5 workers
+│   ├── job_discovery/               # Lead + 5 workers + 3 platform scrapers
+│   ├── application_engine/          # Lead + 5 workers (incl. human approval gate)
+│   ├── status_tracker/              # Lead + 4 workers
+│   ├── offer_intelligence/          # Lead + 6 workers
+│   └── interview_prep/              # Lead + 5 workers
+│
 ├── skills/
-│   ├── llm.py                       # Claude API wrapper
+│   ├── llm.py                       # Groq → Gemini fallback, text + JSON modes
 │   ├── github_tools.py              # GitHub API helpers
-│   ├── browser_tools.py             # Playwright helpers
+│   ├── browser_tools.py             # Playwright session helpers
 │   └── file_tools.py                # Output file management
-├── config/
-│   ├── settings.py                  # Pydantic settings (reads .env)
-│   └── user_profile.py
-├── user_data/
-│   └── profile.example.json         # Fill this in and rename to profile.json
-└── outputs/                         # All generated files (gitignored)
-    ├── resumes/
-    ├── cover_letters/
-    ├── negotiation/
-    ├── reports/
-    └── github_intelligence/
+│
+├── backend/
+│   ├── main.py                      # FastAPI app — serves React SPA + API routes
+│   ├── runner.py                    # Background job runner + SSE pub/sub
+│   └── routes/                      # sessions, modules, data, stream, auth
+│
+├── frontend/                        # React + TypeScript + Vite + Tailwind
+│   └── src/
+│       ├── App.tsx                  # State management, routing, SSE listener
+│       ├── screens/                 # Dashboard, GithubIntel, JobDiscovery, Applications, Offers, InterviewPrep
+│       └── modals/                  # NewSession, Offer, Prep
+│
+├── config/settings.py               # Pydantic settings — reads .env
+└── memory/sessions/                 # JSON session files (Supabase fallback)
 ```
 
 ---
 
-## Setup
+## Quick Start
 
-### 1. Clone and install
+### 1. Clone & install
 
 ```bash
 git clone https://github.com/rishab-br/job-hunter.git
@@ -196,86 +208,117 @@ cd job-hunter
 
 python -m venv .venv
 .venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Mac/Linux
+# source .venv/bin/activate   # macOS / Linux
 
 pip install -e .
 playwright install chromium
 ```
 
-### 2. Configure environment
+### 2. Environment
 
 ```bash
 cp .env.example .env
-# Edit .env — add ANTHROPIC_API_KEY and GITHUB_TOKEN at minimum
 ```
 
-### 3. Set up your profile
+Edit `.env` — minimum required keys:
+
+```env
+GEMINI_API_KEY=...          # Primary LLM
+GROQ_API_KEY=...            # Fast inference (optional but recommended)
+GITHUB_TOKEN=...            # For GitHub Intelligence
+GITHUB_USERNAME=...
+
+# Optional — needed for LinkedIn scraping
+LINKEDIN_EMAIL=...
+LINKEDIN_PASSWORD=...
+```
+
+### 3. Start the dashboard
 
 ```bash
-cp user_data/profile.example.json user_data/profile.json
-# Edit profile.json with your real experience, education, and skills
+# Terminal 1 — backend
+uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — frontend dev server
+cd frontend && npm install && npm run dev
 ```
+
+Open **http://localhost:5173** → Create a session → Run modules from the dashboard.
 
 ---
 
-## Usage
+## CLI Usage
 
 ```bash
-# Analyze your GitHub portfolio for a target role
-python main.py github --username your_handle --role "AI Engineer" --niche "MLOps" --market "India"
+# Audit your GitHub portfolio
+python main.py github --username rishab-br --role "AI Engineer" --niche "Agentic AI" --market "India"
 
-# Run the full pipeline end-to-end
-python main.py full --username your_handle --role "AI Engineer" --niche "MLOps" --market "India"
+# Full pipeline end-to-end
+python main.py full --username rishab-br --role "AI Engineer" --niche "Agentic AI" --market "India"
 
-# Check application statuses (uses saved session)
+# Check application statuses
 python main.py status --thread-id <uuid>
 
 # Evaluate a job offer
-python main.py offer --thread-id <uuid> --company "TechCorp" --role "ML Engineer" --offer-file offer.txt
+python main.py offer --thread-id <uuid> --company "Stripe" --role "ML Engineer" --offer-file offer.txt
 
-# Resume after the human-approval gate
+# Resume after human-approval gate
 python main.py resume --thread-id <uuid> --approve
 
-# Get coaching on employer's counter-offer response
+# Get coaching on employer's response
 python main.py respond --thread-id <uuid> --offer-id offer_abc12345 --response-file reply.txt
+
+# Generate interview prep for a role
+python main.py prep --company "Acme AI" --role "ML Engineer" --jd-file jd.txt
 ```
 
 ---
 
 ## Outputs
 
-Every run generates files in `outputs/` (gitignored — contains personal data):
+All generated files land in `outputs/` (gitignored — contains personal data):
 
-| File | Content |
-|---|---|
-| `outputs/github_intelligence/improvement_plan_<date>.md` | Prioritised portfolio improvement plan |
-| `outputs/resumes/<company>_resume.md` | Tailored resume per application |
-| `outputs/cover_letters/<company>_cover_letter.md` | Role-specific cover letter |
-| `outputs/form_screenshots/<company>.png` | Form preview before submission |
-| `outputs/negotiation/<company>_negotiation_script.md` | Full negotiation playbook |
-| `outputs/negotiation/<company>_response_coaching.md` | Coaching on employer's response |
-| `outputs/reports/pipeline_<date>.md` | Weekly application pipeline digest |
+| Path | Content |
+|------|---------|
+| `github_intelligence/improvement_plan_<date>.md` | Prioritised portfolio action plan |
+| `resumes/<company>_resume.md` | ATS-optimised resume per job |
+| `cover_letters/<company>_cover_letter.md` | Role + company-specific letter |
+| `form_screenshots/<company>.png` | Form preview before submission |
+| `negotiation/<company>_negotiation_script.md` | Full email + phone negotiation playbook |
+| `negotiation/<company>_response_coaching.md` | Coaching after employer replies |
+| `interview_prep/<company>_cheat_sheet.md` | Full Q&amp;A cheat sheet |
+| `interview_prep/<company>_quick_card.md` | 5-minute pre-interview card |
+| `reports/pipeline_<date>.md` | Weekly application pipeline digest |
 
 ---
 
 ## Roadmap
 
-- [ ] Multi-LLM routing (Groq + Gemini Flash + Claude by task complexity)
-- [ ] FastAPI backend exposing the orchestrator as REST endpoints
-- [ ] Next.js dashboard with real-time pipeline visualization
-- [ ] Supabase integration (replace JSON session files with PostgreSQL)
-- [ ] Interview Prep Lead Agent (generates Q&A from JD + your profile)
-- [ ] Gmail trigger for automatic offer/status parsing
-- [ ] Semantic job search with pgvector embeddings
+- [x] GitHub Intelligence — portfolio audit + gap analysis + improvement plan
+- [x] Job Discovery — LinkedIn / Indeed / Naukri scrapers with anti-detection
+- [x] Application Engine — resume + cover letter tailoring + form filling
+- [x] Human Approval Gate — LangGraph `interrupt()` before every submission
+- [x] Status Tracker — application monitoring + follow-up scheduling + ghosted detection
+- [x] Offer Intelligence — CTC benchmarking + clause risk + counter-offer + negotiation script
+- [x] Interview Prep — JD decoding + Q&A generation + cheat sheet builder
+- [x] FastAPI backend + SSE real-time log streaming
+- [x] React dashboard — Mission Control with live agent log terminal
+- [x] GitHub OAuth + Supabase multi-user support
+- [ ] Gmail trigger — auto-detect offer emails and kick off Offer Intelligence
+- [ ] pgvector semantic job search — embed JDs and find similar roles
+- [ ] Multi-user portfolio sharing — share your improvement plan publicly
+- [ ] Scheduled runs — weekly job discovery via cron
 
 ---
 
 ## Disclaimer
 
-This tool is built for personal job search use. Automated interactions with LinkedIn, Indeed, and Naukri may conflict with their Terms of Service. The system is intentionally designed with a **human approval gate before every form submission** — no application is ever submitted without your explicit confirmation.
+Built for personal job search use. Automated interactions with LinkedIn, Indeed, and Naukri may conflict with their Terms of Service. The system is intentionally designed with a **human approval gate before every form submission** — no application is ever auto-submitted.
 
 ---
 
-## Author
+<div align="center">
 
-Built by [Rishab](https://github.com/rishab-br) as a portfolio project demonstrating hierarchical multi-agent orchestration, stateful LangGraph workflows, and human-in-the-loop AI system design.
+Built by [Rishab](https://github.com/rishab-br) · Demonstrating hierarchical multi-agent orchestration, stateful LangGraph workflows, and human-in-the-loop system design.
+
+</div>
