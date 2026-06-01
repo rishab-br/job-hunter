@@ -63,8 +63,11 @@ Return a JSON array. Each element must have exactly this structure:
 Recency guide: active = pushed within 30 days, recent = 30-180 days, stale = 180+ days.
 Completeness considers: README quality, description, topics, test signals, deployment evidence, code comments."""
 
-    depth_reports: list[dict] = llm.call_json(system, user, max_tokens=4096)
-    logs.append(f"[project_depth_analyzer] Done. {sum(1 for r in depth_reports if r.get('showcase_worthy'))} showcase-worthy repos identified.")
+    depth_reports = llm.call_json(system, user, max_tokens=4096)
+    # Groq may wrap a list in a dict — unwrap it
+    if isinstance(depth_reports, dict):
+        depth_reports = next((v for v in depth_reports.values() if isinstance(v, list)), [])
+    logs.append(f"[project_depth_analyzer] Done. {sum(1 for r in depth_reports if isinstance(r, dict) and r.get('showcase_worthy'))} showcase-worthy repos identified.")
 
     return {
         **state,

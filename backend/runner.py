@@ -41,18 +41,7 @@ def register_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 # ── Session I/O (Supabase primary, file fallback) ─────────────────────────────
 
-def save_session(thread_id: str, state: dict, user_id: str = None) -> None:
-    from backend.supabase_client import get_supabase
-    sb = get_supabase()
-    if sb is not None:
-        sb.table("job_sessions").upsert({
-            "thread_id": thread_id,
-            "user_id":   user_id,
-            "state":     state,
-        }).execute()
-        return
-
-    # ── File fallback ──────────────────────────────────────────────────────────
+def _file_save(thread_id: str, state: dict) -> None:
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     path = SESSION_DIR / f"{thread_id}.json"
     safe = {}
@@ -65,14 +54,36 @@ def save_session(thread_id: str, state: dict, user_id: str = None) -> None:
     path.write_text(json.dumps(safe, indent=2, default=str), encoding="utf-8")
 
 
+def save_session(thread_id: str, state: dict, user_id: str = None) -> None:
+    from backend.supabase_client import get_supabase
+    sb = get_supabase()
+    if sb is not None:
+        try:
+            sb.table("job_sessions").upsert({
+                "thread_id": thread_id,
+                "user_id":   user_id,
+                "state":     state,
+            }).execute()
+            return
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Supabase save failed, using file fallback: {e}")
+
+    _file_save(thread_id, state)
+
+
 def load_session(thread_id: str) -> Optional[dict]:
     from backend.supabase_client import get_supabase
     sb = get_supabase()
     if sb is not None:
-        result = sb.table("job_sessions").select("state").eq("thread_id", thread_id).execute()
-        if result.data:
-            return result.data[0]["state"]
-        return None
+        try:
+            result = sb.table("job_sessions").select("state").eq("thread_id", thread_id).execute()
+            if result.data:
+                return result.data[0]["state"]
+            return None
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Supabase load failed, using file fallback: {e}")
 
     # ── File fallback ──────────────────────────────────────────────────────────
     path = SESSION_DIR / f"{thread_id}.json"
@@ -85,25 +96,29 @@ def list_sessions(user_id: str = None) -> List[dict]:
     from backend.supabase_client import get_supabase
     sb = get_supabase()
     if sb is not None:
-        query = sb.table("job_sessions").select("thread_id, state, updated_at")
-        if user_id:
-            query = query.eq("user_id", user_id)
-        result = query.order("updated_at", desc=True).execute()
-        out = []
-        for row in result.data:
-            d = row.get("state") or {}
-            out.append({
-                "thread_id":       row["thread_id"],
-                "github_username": d.get("github_username", ""),
-                "target_role":     d.get("target_role", ""),
-                "target_market":   d.get("target_market", ""),
-                "current_phase":   d.get("current_phase", "idle"),
-                "jobs_found":      len(d.get("discovered_jobs") or []),
-                "apps_submitted":  len(d.get("applications") or []),
-                "offers":          len(d.get("active_offers") or []),
-                "prep_sessions":   len(d.get("interview_prep_sessions") or []),
-            })
-        return out
+        try:
+            query = sb.table("job_sessions").select("thread_id, state, updated_at")
+            if user_id:
+                query = query.eq("user_id", user_id)
+            result = query.order("updated_at", desc=True).execute()
+            out = []
+            for row in result.data:
+                d = row.get("state") or {}
+                out.append({
+                    "thread_id":       row["thread_id"],
+                    "github_username": d.get("github_username", ""),
+                    "target_role":     d.get("target_role", ""),
+                    "target_market":   d.get("target_market", ""),
+                    "current_phase":   d.get("current_phase", "idle"),
+                    "jobs_found":      len(d.get("discovered_jobs") or []),
+                    "apps_submitted":  len(d.get("applications") or []),
+                    "offers":          len(d.get("active_offers") or []),
+                    "prep_sessions":   len(d.get("interview_prep_sessions") or []),
+                })
+            return out
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Supabase list failed, using file fallback: {e}")
 
     # ── File fallback ──────────────────────────────────────────────────────────
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
@@ -184,6 +199,15 @@ def submit_job(
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 
+# ── Subgraph registry — single-module runs bypass the master orchestrator ─────
+# This prevents github → job_discovery → application → ... cascade.
+_STANDALONE_SUBGRAPHS = {
+    "github":        "agents.github_intelligence",
+    "job_discovery": "agents.job_discovery",
+    "status":        "agents.status_tracker",
+}
+
+
 def _worker(
     job_id: str,
     thread_id: str,
@@ -195,21 +219,15 @@ def _worker(
     try:
         _jobs[job_id]["status"] = "running"
 
-        from orchestrator.master import compile_graph
         from state import SystemPhase
         from orchestrator import inject_interview_target
         from orchestrator.master import inject_offer as _inject_offer
 
-        phase_map = {
-            "github":         SystemPhase.GITHUB_ANALYSIS,
-            "job_discovery":  SystemPhase.JOB_DISCOVERY,
-            "application":    SystemPhase.APPLYING,
-            "status":         SystemPhase.TRACKING,
-            "offer":          SystemPhase.OFFER_EVALUATION,
-            "interview_prep": SystemPhase.INTERVIEW_PREP,
-        }
+        config = {"configurable": {"thread_id": thread_id}}
 
+        # ── Offer / Interview Prep: need injection + master graph ──────────────
         if module == "offer":
+            from orchestrator.master import compile_graph
             state = _inject_offer(
                 state,
                 company=extra["company"],
@@ -217,7 +235,10 @@ def _worker(
                 offer_letter_text=extra["offer_letter_text"],
                 deadline_date=extra.get("deadline_date"),
             )
+            graph = compile_graph()
+
         elif module == "interview_prep":
+            from orchestrator.master import compile_graph
             state = inject_interview_target(
                 state,
                 company=extra["company"],
@@ -226,11 +247,29 @@ def _worker(
                 company_url=extra.get("company_url", ""),
                 job_id=extra.get("job_id"),
             )
-        else:
-            state = {**state, "current_phase": phase_map[module]}
+            graph = compile_graph()
 
-        graph = compile_graph()
-        config = {"configurable": {"thread_id": thread_id}}
+        elif module == "application":
+            # Application engine needs master graph for MemorySaver interrupt/resume
+            from orchestrator.master import compile_graph
+            state = {**state, "current_phase": SystemPhase.APPLYING}
+            graph = compile_graph()
+
+        elif module in _STANDALONE_SUBGRAPHS:
+            # Run the subgraph directly — avoids cascading to next pipeline phase
+            import importlib
+            pkg = importlib.import_module(_STANDALONE_SUBGRAPHS[module])
+            phase_map = {
+                "github":        SystemPhase.GITHUB_ANALYSIS,
+                "job_discovery": SystemPhase.JOB_DISCOVERY,
+                "status":        SystemPhase.TRACKING,
+            }
+            state = {**state, "current_phase": phase_map[module]}
+            graph = pkg.build_subgraph().compile()
+
+        else:
+            from orchestrator.master import compile_graph
+            graph = compile_graph()
 
         prev_log_count = len(state.get("logs") or [])
         final_state = dict(state)

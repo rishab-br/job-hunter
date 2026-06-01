@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-2.5-flash"
 
+    # Groq (fallback when Gemini is unavailable)
+    groq_api_key: str = ""
+
     # GitHub OAuth App (for multi-user frontend auth)
     github_client_id: str = ""
     github_client_secret: str = ""

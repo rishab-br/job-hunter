@@ -3,74 +3,121 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 
-from playwright.sync_api import sync_playwright, Page
+from playwright.sync_api import sync_playwright, Page, BrowserContext
 
 from state import GlobalState
 
 MAX_JOBS = 25
 BASE_URL = "https://www.naukri.com"
 
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
 
 def run(state: GlobalState) -> GlobalState:
-    logs = list(state.get("logs") or [])
+    logs     = list(state.get("logs") or [])
     existing = list(state.get("discovered_jobs") or [])
 
-    logs.append(
-        f"[naukri] Searching for '{state['target_role']}' in {state['target_market']}..."
-    )
+    role   = state["target_role"]
+    market = state["target_market"]
+    logs.append(f"[naukri] Searching for '{role}' in {market}...")
 
     jobs: list[dict] = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                ),
-                viewport={"width": 1280, "height": 900},
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                ],
             )
+            context = browser.new_context(
+                user_agent=_UA,
+                viewport={"width": 1366, "height": 768},
+                locale="en-IN",
+            )
+            _stealth(context)
             page = context.new_page()
-            jobs = _search_jobs(page, state["target_role"], state["target_market"])
+            page.set_default_timeout(45000)
+            jobs = _search_jobs(page, role, market)
             browser.close()
     except Exception as exc:
         logs.append(f"[naukri] Error: {exc}")
 
     logs.append(f"[naukri] Collected {len(jobs)} listings.")
-    return {
-        **state,
-        "discovered_jobs": existing + jobs,
-        "logs": logs,
-    }
+    return {**state, "discovered_jobs": existing + jobs, "logs": logs}
 
 
-# ── Private helpers ────────────────────────────────────────────────────────────
+# ── Anti-detection ────────────────────────────────────────────────────────────
+
+def _stealth(ctx: BrowserContext) -> None:
+    ctx.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver',  { get: () => undefined });
+        Object.defineProperty(navigator, 'plugins',    { get: () => [1, 2, 3] });
+        Object.defineProperty(navigator, 'languages',  { get: () => ['en-IN', 'en'] });
+        window.chrome = { runtime: {} };
+    """)
+
+
+# ── Search ────────────────────────────────────────────────────────────────────
 
 def _search_jobs(page: Page, role: str, market: str) -> list[dict]:
-    role_slug = role.lower().replace(" ", "-")
-    location_slug = market.lower().replace(" ", "-")
-    url = f"{BASE_URL}/{role_slug}-jobs-in-{location_slug}"
+    # Build SEO slug URL (e.g. /ai-engineer-jobs-in-india)
+    role_slug     = re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-")
+    location_slug = re.sub(r"[^a-z0-9]+", "-", market.lower()).strip("-")
+    seo_url  = f"{BASE_URL}/{role_slug}-jobs-in-{location_slug}"
+    # Fallback: query-param URL
+    qp_url   = f"{BASE_URL}/jobs?keyword={quote_plus(role)}&location={quote_plus(market)}&experience=0-8&sort=1"
 
-    page.goto(url, wait_until="networkidle")
-    _delay(2, 3)
+    # Try SEO URL first, fall back to query-param URL if no cards found
+    for attempt_url in [seo_url, qp_url]:
+        page.goto(attempt_url, wait_until="domcontentloaded", timeout=45000)
+        _delay(2, 3)
+        _dismiss_popups(page)
 
-    # Dismiss any popups
-    try:
-        page.click("button.loginButton", timeout=2000)
-    except Exception:
-        pass
+        # Wait for job cards to appear
+        try:
+            page.wait_for_selector(
+                ".srp-jobtuple-wrapper, article.jobTuple, [class*='jobTuple'], .list",
+                timeout=10000,
+            )
+        except Exception:
+            _delay(2, 3)
+
+        cards = _get_cards(page)
+        if cards:
+            break
+    else:
+        return []
 
     jobs: list[dict] = []
-    seen: set[str] = set()
+    seen: set[str]   = set()
 
-    for _ in range(3):
-        cards = page.query_selector_all("article.jobTuple")
-        if not cards:
-            cards = page.query_selector_all(".srp-jobtuple-wrapper")
+    for page_num in range(3):
+        if page_num > 0:
+            next_btn = (
+                page.query_selector("a[class*='next']") or
+                page.query_selector("[class*='pagination'] a:last-child") or
+                page.query_selector("a[aria-label*='next' i]")
+            )
+            if not next_btn:
+                break
+            next_btn.click()
+            try:
+                page.wait_for_selector(".srp-jobtuple-wrapper, article.jobTuple", timeout=10000)
+            except Exception:
+                _delay(2, 3)
+            _dismiss_popups(page)
 
-        for card in cards:
+        for card in _get_cards(page):
             try:
                 job = _extract_card(page, card)
                 if job and job["id"] not in seen:
@@ -81,58 +128,106 @@ def _search_jobs(page: Page, role: str, market: str) -> list[dict]:
             except Exception:
                 continue
 
-        next_btn = page.query_selector("a[class*='next']")
-        if not next_btn:
-            break
-        next_btn.click()
-        page.wait_for_load_state("networkidle")
-        _delay(2, 3)
-
     return jobs
 
 
+def _get_cards(page: Page) -> list:
+    return (
+        page.query_selector_all(".srp-jobtuple-wrapper") or
+        page.query_selector_all("article.jobTuple") or
+        page.query_selector_all("[class*='jobTuple']") or
+        page.query_selector_all(".list > li")
+    )
+
+
+def _dismiss_popups(page: Page) -> None:
+    for selector in [
+        "button.loginButton",
+        "[class*='close']",
+        "[data-ga-track*='close']",
+        "button[title='Close']",
+        ".nI-gNb-xBtn",
+    ]:
+        try:
+            btn = page.query_selector(selector)
+            if btn and btn.is_visible():
+                btn.click()
+                _delay(0.3, 0.6)
+        except Exception:
+            pass
+
+
+# ── Card extraction ────────────────────────────────────────────────────────────
+
 def _extract_card(page: Page, card) -> dict | None:
-    title_el = card.query_selector("a.title")
-    if not title_el:
-        title_el = card.query_selector(".jobTitle a")
-    company_el = card.query_selector("a.subTitle")
-    if not company_el:
-        company_el = card.query_selector(".companyInfo a")
-    location_el = card.query_selector(".location span")
-    salary_el = card.query_selector(".salary")
-    exp_el = card.query_selector(".experience")
+    # Title — current Naukri structure
+    title_el = (
+        card.query_selector("a.title") or
+        card.query_selector(".row1 a") or
+        card.query_selector("[class*='title'] a") or
+        card.query_selector("h2 a")
+    )
+    # Company
+    company_el = (
+        card.query_selector("a.comp-name") or
+        card.query_selector(".comp-dtls-wrap a") or
+        card.query_selector("[class*='comp-name']") or
+        card.query_selector(".companyInfo span") or
+        card.query_selector("a.subTitle")
+    )
+    # Location
+    location_el = (
+        card.query_selector(".loc span") or
+        card.query_selector("[class*='location'] li") or
+        card.query_selector(".locWdth span") or
+        card.query_selector(".location span")
+    )
+    # Salary
+    salary_el = (
+        card.query_selector(".sal-wrap span") or
+        card.query_selector("[class*='salary']")
+    )
+    # Experience
+    exp_el = (
+        card.query_selector(".exp-wrap span") or
+        card.query_selector("[class*='experience'] span")
+    )
 
     if not title_el or not company_el:
         return None
 
-    url = title_el.get_attribute("href") or ""
+    url    = title_el.get_attribute("href") or ""
     job_id = _extract_naukri_id(url)
 
-    # Open job in new tab to get description
+    # Fetch full description in a new tab
     description = ""
-    try:
-        new_page = page.context.new_page()
-        new_page.goto(url, wait_until="networkidle")
-        _delay(1, 2)
-        desc_el = new_page.query_selector(".job-desc")
-        if not desc_el:
-            desc_el = new_page.query_selector("[class*='jobDescContainer']")
-        description = desc_el.inner_text().strip() if desc_el else ""
-        new_page.close()
-    except Exception:
-        pass
+    if url:
+        try:
+            new_page = page.context.new_page()
+            new_page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            _delay(1, 2)
+            desc_el = (
+                new_page.query_selector(".job-desc") or
+                new_page.query_selector("[class*='jobDescContainer']") or
+                new_page.query_selector(".jdSection") or
+                new_page.query_selector("#job_jd")
+            )
+            description = desc_el.inner_text().strip() if desc_el else ""
+            new_page.close()
+        except Exception:
+            pass
 
     return {
-        "id": job_id,
-        "platform": "naukri",
-        "title": title_el.inner_text().strip(),
-        "company": company_el.inner_text().strip(),
-        "location": location_el.inner_text().strip() if location_el else "",
-        "url": url,
+        "id":          job_id,
+        "platform":    "Naukri",
+        "title":       title_el.inner_text().strip(),
+        "company":     company_el.inner_text().strip(),
+        "location":    location_el.inner_text().strip() if location_el else "",
+        "url":         url,
         "description": description[:4000],
         "salary_range": salary_el.inner_text().strip() if salary_el else None,
-        "job_type": exp_el.inner_text().strip() if exp_el else None,
-        "scraped_at": datetime.now(timezone.utc).isoformat(),
+        "job_type":    exp_el.inner_text().strip() if exp_el else None,
+        "scraped_at":  datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -68,6 +68,9 @@ async def get_summary(thread_id: str):
     scored = state.get("scored_jobs") or []
     apps   = state.get("applications") or []
 
+    audit = state.get("github_audit") or {}
+    repos = state.get("repo_depth_reports") or []
+
     return {
         "thread_id":       thread_id,
         "github_username": state.get("github_username", ""),
@@ -75,16 +78,31 @@ async def get_summary(thread_id: str):
         "current_phase":   state.get("current_phase", "idle"),
         "logs":            (state.get("logs") or [])[-50:],
 
+        # GitHub Intel
+        "github_score":    audit.get("overall_score"),
+        "repos_analyzed":  audit.get("repos_analyzed") or len(repos) or None,
+
+        # Job Discovery
         "jobs_found":      len(state.get("discovered_jobs") or []),
         "jobs_high_fit":   sum(1 for j in scored if j.get("relevance_score", 0) >= 75),
+
+        # Application Engine
         "apps_submitted":  len(apps),
-        "offers_received": len(state.get("active_offers") or []),
-        "prep_sessions":   len(state.get("interview_prep_sessions") or []),
+
+        # Status Tracker
         "ghosted":         len(state.get("ghosted_applications") or []),
 
-        "has_audit":  bool(state.get("github_audit")),
-        "has_jobs":   bool(state.get("discovered_jobs")),
-        "has_apps":   bool(apps),
-        "has_offers": bool(state.get("active_offers")),
-        "has_prep":   bool(state.get("interview_prep_sessions")),
+        # Offer Intelligence
+        "offers_received": len(state.get("active_offers") or []),
+
+        # Interview Prep
+        "prep_sessions":   len(state.get("interview_prep_sessions") or []),
+
+        # Phase completion flags
+        "has_github_analysis":  bool(audit),
+        "has_job_discovery":    bool(state.get("discovered_jobs")),
+        "has_applying":         bool(apps),
+        "has_tracking":         bool(state.get("application_statuses")),
+        "has_offer_evaluation": bool(state.get("active_offers")),
+        "has_interview_prep":   bool(state.get("interview_prep_sessions")),
     }

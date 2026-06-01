@@ -13,13 +13,28 @@ def run(state: GlobalState) -> GlobalState:
 
     # Summarise what the user currently has
     current_languages = audit.get("top_languages", [])
+    # Normalize topics to strings — LLM sometimes returns dicts instead of plain strings
+    if not isinstance(depth_reports, list):
+        depth_reports = []
     current_topics = list({
-        topic
+        topic if isinstance(topic, str) else topic.get("name", str(topic))
         for r in depth_reports
+        if isinstance(r, dict)
         for topic in (r.get("topics") or [])
+        if topic
     })
-    showcase_repos = [r["name"] for r in depth_reports if r.get("showcase_worthy")]
-    weak_repos = [r["name"] for r in depth_reports if r.get("completeness_score", 100) < 50]
+    showcase_repos = [r["name"] for r in depth_reports if isinstance(r, dict) and r.get("showcase_worthy")]
+    weak_repos = [r["name"] for r in depth_reports if isinstance(r, dict) and r.get("completeness_score", 100) < 50]
+
+    depth_summary = json.dumps([
+        {
+            "name": r["name"],
+            "completeness_score": r.get("completeness_score"),
+            "showcase_worthy": r.get("showcase_worthy"),
+            "improvements_needed": r.get("improvements_needed"),
+        }
+        for r in depth_reports if isinstance(r, dict)
+    ], indent=2)
 
     system = (
         "You are a senior engineering career coach specialising in helping developers "
@@ -37,7 +52,7 @@ Showcase-worthy repos: {showcase_repos}
 Weak repos (completeness < 50): {weak_repos}
 
 Repo depth summary:
-{json.dumps([{{"name": r["name"], "completeness_score": r.get("completeness_score"), "showcase_worthy": r.get("showcase_worthy"), "improvements_needed": r.get("improvements_needed")}} for r in depth_reports], indent=2)}
+{depth_summary}
 
 --- MARKET REQUIREMENTS ---
 {json.dumps(trend_data, indent=2)}

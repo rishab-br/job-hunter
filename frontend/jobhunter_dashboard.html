@@ -486,7 +486,7 @@
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
-const API = 'http://localhost:8000';
+const API = `${location.protocol}//${location.hostname}:${location.port || 8001}`;
 
 // ── App state ────────────────────────────────────────────────────────────────
 let currentThreadId = localStorage.getItem('jh_thread_id') || null;

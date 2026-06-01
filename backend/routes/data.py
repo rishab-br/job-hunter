@@ -41,20 +41,22 @@ async def get_jobs(thread_id: str):
     jobs = []
     for j in scored:
         jid = j.get("job_id", "")
-        jd = analyzed.get(jid, {})
+        jd  = analyzed.get(jid, {})
+        # LLM returns "title" not "job_title" — normalise here
+        title = j.get("title") or j.get("job_title") or ""
         jobs.append({
             "job_id":          jid,
             "company":         j.get("company", ""),
-            "job_title":       j.get("job_title", ""),
+            "job_title":       title,
             "location":        j.get("location", ""),
             "platform":        j.get("platform", ""),
             "url":             j.get("url", ""),
             "relevance_score": j.get("relevance_score", 0),
             "priority":        j.get("priority", "low"),
             "recommended":     j.get("recommended", False),
-            "seniority_level": jd.get("seniority_level", ""),
-            "role_summary":    jd.get("role_summary", ""),
-            "red_flags":       jd.get("red_flags", []),
+            "seniority_level": j.get("seniority_level") or jd.get("seniority_level", ""),
+            "role_summary":    j.get("role_summary")    or jd.get("role_summary", ""),
+            "red_flags":       j.get("red_flags")       or jd.get("red_flags", []),
         })
     return {"jobs": jobs, "total": len(jobs)}
 

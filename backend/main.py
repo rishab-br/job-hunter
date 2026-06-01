@@ -4,7 +4,8 @@ JobHunter — FastAPI backend.
 Start with:
     uvicorn backend.main:app --reload --port 8000
 
-The frontend HTML is served at http://localhost:8000/
+React SPA served from frontend/dist/ (build first: cd frontend && npm run build)
+Falls back to legacy jobhunter_dashboard.html if dist/ doesn't exist.
 All API routes are under /api/...
 SSE log stream at /api/stream/<thread_id>
 """
@@ -60,16 +61,40 @@ app.include_router(stream.router)
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 
-FRONTEND = Path(__file__).parent.parent / "frontend"
+FRONTEND     = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIST = FRONTEND / "dist"
+
+# Mount built React assets (JS/CSS chunks) if the dist folder exists
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
-    """Serve the dashboard HTML at the root URL."""
-    html_path = FRONTEND / "jobhunter_dashboard.html"
-    if not html_path.exists():
-        return HTMLResponse("<h1>frontend/jobhunter_dashboard.html not found</h1>", 404)
-    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    """Serve React SPA (dist/index.html) or legacy HTML fallback."""
+    dist_index = FRONTEND_DIST / "index.html"
+    if dist_index.exists():
+        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
+    legacy = FRONTEND / "jobhunter_dashboard.html"
+    if legacy.exists():
+        return HTMLResponse(legacy.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        "<h1>Frontend not built.</h1><p>Run: <code>cd frontend && npm install && npm run build</code></p>",
+        status_code=503,
+    )
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
+async def serve_spa(full_path: str):
+    """Catch-all for React Router — return index.html for all non-API paths."""
+    if full_path.startswith("api/") or full_path.startswith("auth/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+    dist_index = FRONTEND_DIST / "index.html"
+    if dist_index.exists():
+        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
