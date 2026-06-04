@@ -65,11 +65,12 @@ def _fill_form(job: dict, profile: dict, platform: str) -> dict:
         )
         page = context.new_page()
 
-        if platform == "linkedin":
+        p_lower = platform.lower()
+        if p_lower == "linkedin":
             filled_fields = _fill_linkedin(page, job, profile)
-        elif platform == "indeed":
+        elif p_lower == "indeed":
             filled_fields = _fill_indeed(page, job, profile)
-        elif platform == "naukri":
+        elif p_lower == "naukri":
             filled_fields = _fill_naukri(page, job, profile)
         else:
             filled_fields = {"note": "Platform not supported for auto-fill"}

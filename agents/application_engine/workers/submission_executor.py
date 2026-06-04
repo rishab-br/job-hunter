@@ -68,11 +68,12 @@ def _submit(item: dict, profile: dict, platform: str) -> dict:
             )
             page = context.new_page()
 
-            if platform == "linkedin":
+            p_lower = platform.lower()
+            if p_lower == "linkedin":
                 status = _submit_linkedin(page, item, profile)
-            elif platform == "indeed":
+            elif p_lower == "indeed":
                 status = _submit_indeed(page, item, profile)
-            elif platform == "naukri":
+            elif p_lower == "naukri":
                 status = _submit_naukri(page, item, profile)
             else:
                 status = "platform_not_supported"

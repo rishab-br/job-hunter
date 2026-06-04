@@ -162,15 +162,70 @@ async def run_prep(req: RunPrepRequest):
 
 @router.post("/api/resume")
 async def resume_pipeline(req: ResumeRequest):
-    from orchestrator import resume_after_approval
-    import asyncio
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: resume_after_approval(approved=req.approved, thread_id=req.thread_id),
-    )
-    runner.save_session(req.thread_id, result)
-    return {"status": "resumed", "thread_id": req.thread_id, "approved": req.approved}
+    """
+    Resume the pipeline after a human approval decision.
+    Runs in the background (submission uses Playwright) and streams logs via SSE.
+    Returns a job_id the frontend can poll.
+    """
+    job_id = runner.resume_application(req.thread_id, req.approved)
+    return {"job_id": job_id, "thread_id": req.thread_id}
+
+
+# ── Output file serving (resumes, cover letters, screenshots) ──────────────────
+
+from pathlib import Path
+from fastapi.responses import FileResponse
+
+_OUTPUTS_ROOT = Path("outputs").resolve()
+
+
+@router.get("/api/files")
+async def serve_output_file(path: str):
+    """Serve a file from the outputs/ directory (path-traversal protected)."""
+    try:
+        resolved = Path(path).resolve()
+    except Exception:
+        raise HTTPException(400, "Invalid path")
+    if _OUTPUTS_ROOT not in resolved.parents and resolved != _OUTPUTS_ROOT:
+        raise HTTPException(403, "Access denied — file is outside outputs/")
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(404, "File not found")
+    return FileResponse(resolved)
+
+
+# ── Test-job seeder (demo the approval gate without scraping) ───────────────────
+
+@router.post("/api/sessions/{thread_id}/seed-test-job")
+async def seed_test_job(thread_id: str):
+    """
+    Injects one high-scoring synthetic job into the session so the real
+    Application Engine (resume tailoring → cover letter → form fill → approval
+    gate) can be exercised end-to-end without a live scrape.
+    """
+    state = _load_or_404(thread_id)
+    test_job = {
+        "job_id":          "test_demo_001",
+        "id":              "test_demo_001",
+        "title":           f"{state.get('target_role') or 'AI Engineer'} (Demo)",
+        "job_title":       f"{state.get('target_role') or 'AI Engineer'} (Demo)",
+        "company":         "Acme AI (Demo)",
+        "platform":        "LinkedIn",
+        "location":        state.get("target_market") or "Remote",
+        "url":             "https://www.linkedin.com/jobs/view/0000000000",
+        "relevance_score": 92,
+        "priority":        "high",
+        "recommended":     True,
+        "must_have_skills":   ["Python", "LangGraph", "LLM orchestration", "FastAPI"],
+        "nice_to_have_skills": ["React", "Playwright"],
+        "role_summary":    "Build and ship autonomous multi-agent systems end to end.",
+        "application_note": "Emphasise the JobHunter multi-agent project.",
+    }
+    scored = list(state.get("scored_jobs") or [])
+    scored = [j for j in scored if j.get("job_id") != "test_demo_001"]
+    scored.insert(0, test_job)
+    state["scored_jobs"] = scored
+    runner.save_session(thread_id, state)
+    return {"status": "seeded", "thread_id": thread_id, "job_id": "test_demo_001"}
 
 
 # ── Job status ────────────────────────────────────────────────────────────────

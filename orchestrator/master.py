@@ -67,10 +67,29 @@ def build_graph() -> StateGraph:
     return graph
 
 
+# ── Shared checkpointer ─────────────────────────────────────────────────────────
+# A single process-wide MemorySaver so an interrupt created during one request
+# (e.g. the human approval gate) can be resumed by a *separate* later request.
+# A fresh MemorySaver per compile would lose the interrupted checkpoint.
+_SHARED_CHECKPOINTER = None
+
+
+def get_checkpointer():
+    """Returns the process-wide shared MemorySaver (lazily created)."""
+    global _SHARED_CHECKPOINTER
+    if _SHARED_CHECKPOINTER is None:
+        _SHARED_CHECKPOINTER = MemorySaver()
+    return _SHARED_CHECKPOINTER
+
+
 def compile_graph(checkpointer=None):
-    """Returns a compiled Master graph with checkpointing enabled."""
+    """
+    Returns a compiled Master graph with checkpointing enabled.
+    Defaults to the shared process-wide checkpointer so interrupt/resume
+    works across separate HTTP requests.
+    """
     if checkpointer is None:
-        checkpointer = MemorySaver()
+        checkpointer = get_checkpointer()
     return build_graph().compile(checkpointer=checkpointer)
 
 

@@ -10,8 +10,9 @@ import InterviewPrep from './screens/InterviewPrep'
 import NewSessionModal from './modals/NewSessionModal'
 import OfferModal      from './modals/OfferModal'
 import PrepModal       from './modals/PrepModal'
+import ApprovalModal   from './modals/ApprovalModal'
 import { api, createSSE, nowTs } from './api'
-import type { AuthState, Session, DashboardSummary, Screen, ModalType, ModuleState, LogEntry } from './types'
+import type { AuthState, Session, DashboardSummary, Screen, ModalType, ModuleState, LogEntry, PendingApproval } from './types'
 
 let logIdCounter = 0
 
@@ -25,7 +26,11 @@ export default function App() {
   const [logs,         setLogs]         = useState<LogEntry[]>([])
   const [activeJobId,  setActiveJobId]  = useState<string | null>(null)
   const [modal,        setModal]        = useState<ModalType>(null)
-  const sseCleanup = useRef<(() => void) | null>(null)
+  const [pending,      setPending]      = useState<PendingApproval | null>(null)
+  const [approving,    setApproving]    = useState(false)
+  const sseCleanup   = useRef<(() => void) | null>(null)
+  const threadIdRef  = useRef<string | null>(null)
+  threadIdRef.current = threadId
 
   // ── Auth ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +85,9 @@ export default function App() {
     if (threadId) {
       connectSSE(threadId)
       loadSummary(threadId)
+      checkPending(threadId)   // resurface the approval gate if one is open
+    } else {
+      setPending(null)
     }
     return () => { sseCleanup.current?.() }
   }, [threadId])
@@ -100,14 +108,75 @@ export default function App() {
 
   function connectSSE(id: string) {
     sseCleanup.current?.()
-    sseCleanup.current = createSSE(id, (msg) => {
-      addLog(msg)
-    })
+    sseCleanup.current = createSSE(
+      id,
+      (msg) => addLog(msg),
+      (signal) => {
+        if (signal === 'interrupt') {
+          // Pipeline paused at the approval gate — surface the review modal
+          checkPending(id)
+        }
+      },
+    )
   }
 
   function addLog(raw: string) {
     const entry = parseLogLine(raw, logIdCounter++)
     setLogs(prev => [entry, ...prev].slice(0, 80))
+  }
+
+  // ── Human approval gate ────────────────────────────────────────────────────────
+
+  async function checkPending(id: string) {
+    try {
+      const p = await api.sessions.pending(id)
+      setPending(p.awaiting ? p : null)
+    } catch {
+      setPending(null)
+    }
+  }
+
+  async function handleApprovalDecision(approved: boolean) {
+    const id = threadIdRef.current
+    if (!id) return
+    setApproving(true)
+    addLog(`[SYSTEM] ${approved ? 'Approving' : 'Skipping'} application…`)
+    try {
+      const { job_id } = await api.resume(id, approved)
+      setActiveJobId(job_id)
+      // Poll the resume job — it either re-interrupts (next app) or finishes
+      pollResume(job_id, id)
+    } catch {
+      addLog('[ERROR] Failed to submit approval decision')
+      setApproving(false)
+    }
+  }
+
+  function pollResume(jobId: string, id: string) {
+    const iv = setInterval(async () => {
+      try {
+        const j = await api.jobs.poll(jobId)
+        if (j.status === 'awaiting_approval') {
+          clearInterval(iv)
+          setActiveJobId(null)
+          setApproving(false)
+          await checkPending(id)            // surfaces the next queued application
+        } else if (j.status === 'done') {
+          clearInterval(iv)
+          setActiveJobId(null)
+          setApproving(false)
+          setPending(null)                  // queue cleared
+          setModuleStates(prev => ({ ...prev, application: { status: 'done', ts: nowTs() } }))
+          addLog('[SYSTEM] ✓ All applications processed')
+          loadSummary(id)
+        } else if (j.status === 'failed') {
+          clearInterval(iv)
+          setActiveJobId(null)
+          setApproving(false)
+          addLog(`[ERROR] Submission failed: ${j.error ?? 'unknown'}`)
+        }
+      } catch { /* retry */ }
+    }, 2000)
   }
 
   // ── Session creation ─────────────────────────────────────────────────────────
@@ -154,12 +223,20 @@ export default function App() {
     const iv = setInterval(async () => {
       try {
         const j = await api.jobs.poll(jobId)
-        if (j.status === 'done') {
+        const id = threadIdRef.current
+        if (j.status === 'awaiting_approval') {
+          // Application engine paused at the human approval gate
+          clearInterval(iv)
+          setActiveJobId(null)
+          setModuleStates(prev => ({ ...prev, [moduleKey]: { status: 'warn', ts: nowTs() } }))
+          addLog('[SYSTEM] ⏸ Awaiting your approval')
+          if (id) await checkPending(id)
+        } else if (j.status === 'done') {
           clearInterval(iv)
           setActiveJobId(null)
           setModuleStates(prev => ({ ...prev, [moduleKey]: { status: 'done', ts: nowTs() } }))
           addLog(`[SYSTEM] ✓ ${moduleKey} completed`)
-          if (threadId) loadSummary(threadId)
+          if (id) loadSummary(id)
         } else if (j.status === 'failed') {
           clearInterval(iv)
           setActiveJobId(null)
@@ -168,6 +245,21 @@ export default function App() {
         }
       } catch { /* retry */ }
     }, 2000)
+  }
+
+  // ── Demo: seed a synthetic job to exercise the approval gate ───────────────────
+
+  async function handleSeedTestJob() {
+    const id = threadIdRef.current
+    if (!id) { setModal('new-session'); return }
+    if (activeJobId) return
+    try {
+      await api.sessions.seedTestJob(id)
+      addLog('[SYSTEM] Seeded demo job — running Application Engine…')
+      handleRunModule('application')
+    } catch {
+      addLog('[ERROR] Failed to seed demo job')
+    }
   }
 
   // ── Offer submission ─────────────────────────────────────────────────────────
@@ -232,7 +324,7 @@ export default function App() {
           {screen === 'dashboard'    && <Dashboard    summary={summary} moduleStates={moduleStates} onRunModule={handleRunModule} onRefresh={() => threadId && loadSummary(threadId)} activeJobId={activeJobId} onNavigate={(s) => setScreen(s as import('./types').Screen)} />}
           {screen === 'github'       && <GithubIntel  threadId={threadId} moduleState={moduleStates['github']      ?? { status: 'idle' }} onRunModule={handleRunModule} activeJobId={activeJobId} />}
           {screen === 'discovery'    && <JobDiscovery threadId={threadId} moduleState={moduleStates['discovery']   ?? { status: 'idle' }} onRunModule={handleRunModule} activeJobId={activeJobId} />}
-          {screen === 'applications' && <Applications threadId={threadId} moduleState={moduleStates['application'] ?? { status: 'idle' }} onRunModule={handleRunModule} activeJobId={activeJobId} />}
+          {screen === 'applications' && <Applications threadId={threadId} moduleState={moduleStates['application'] ?? { status: 'idle' }} onRunModule={handleRunModule} onSeedTestJob={handleSeedTestJob} activeJobId={activeJobId} />}
           {screen === 'offers'       && <Offers       threadId={threadId} moduleState={moduleStates['offer']       ?? { status: 'idle' }} onRunModule={handleRunModule} onOpenOfferModal={() => setModal('offer')} activeJobId={activeJobId} />}
           {screen === 'interview'    && <InterviewPrep threadId={threadId} moduleState={moduleStates['prep']       ?? { status: 'idle' }} onOpenPrepModal={() => setModal('prep')} activeJobId={activeJobId} />}
         </div>
@@ -259,6 +351,15 @@ export default function App() {
         <PrepModal
           onClose={() => setModal(null)}
           onSubmit={handlePrepSubmit}
+        />
+      )}
+
+      {/* Human Approval Gate — blocking, auto-surfaced when the pipeline pauses */}
+      {pending?.awaiting && (
+        <ApprovalModal
+          pending={pending}
+          onDecision={handleApprovalDecision}
+          submitting={approving}
         />
       )}
     </div>

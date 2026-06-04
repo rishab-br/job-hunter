@@ -68,8 +68,26 @@ async def get_applications(thread_id: str):
     state = _load(thread_id)
     apps = state.get("applications") or []
     statuses = state.get("application_statuses") or {}
+    TERMINAL_STATUSES = {
+        "submitted", "applied", "viewed", "shortlisted",
+        "interview_scheduled", "offer", "rejected",
+    }
+    def _normalise_status(app: dict) -> str:
+        # Status may come from the submission_executor result or the tracker
+        raw = statuses.get(app.get("job_id")) or app.get("status") or "applied"
+        # submission_executor sets status like "submitted", "captcha_blocked" etc.
+        if raw in TERMINAL_STATUSES:
+            return raw
+        if "submit" in raw:
+            return "submitted"
+        if "captcha" in raw or "blocked" in raw:
+            return "applied"       # treat as not yet submitted cleanly
+        if "not_found" in raw or "not_supported" in raw or "not_reached" in raw:
+            return "applied"
+        return "applied"
+
     enriched = [
-        {**a, "status": statuses.get(a.get("job_id"), "applied")}
+        {**a, "status": _normalise_status(a)}
         for a in apps
     ]
     return {"applications": enriched, "total": len(enriched)}
@@ -120,3 +138,14 @@ async def get_prep(thread_id: str):
     state = _load(thread_id)
     sessions = state.get("interview_prep_sessions") or []
     return {"sessions": sessions, "total": len(sessions)}
+
+
+# ── Human Approval Gate ─────────────────────────────────────────────────────────
+
+@router.get("/{thread_id}/pending")
+async def get_pending(thread_id: str):
+    """
+    Returns the application currently paused at the human approval gate,
+    or {"awaiting": False} if the pipeline isn't waiting on a decision.
+    """
+    return runner.get_pending_approval(thread_id)

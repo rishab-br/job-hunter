@@ -1,4 +1,4 @@
-import type { DashboardSummary, GitHubIntelData, Job, Application, OfferEvaluation, PrepSession, Session } from './types'
+import type { DashboardSummary, GitHubIntelData, Job, Application, OfferEvaluation, PrepSession, Session, PendingApproval } from './types'
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options)
@@ -30,6 +30,12 @@ export const api = {
       request<{ offers: OfferEvaluation[] }>(`/api/sessions/${threadId}/offers`),
     prep: (threadId: string) =>
       request<{ sessions: PrepSession[] }>(`/api/sessions/${threadId}/prep`),
+    pending: (threadId: string) =>
+      request<PendingApproval>(`/api/sessions/${threadId}/pending`),
+    seedTestJob: (threadId: string) =>
+      request<{ status: string; job_id: string }>(`/api/sessions/${threadId}/seed-test-job`, {
+        method: 'POST',
+      }),
   },
 
   modules: {
@@ -41,19 +47,39 @@ export const api = {
       }),
   },
 
+  // Resume the pipeline after an approval decision
+  resume: (threadId: string, approved: boolean) =>
+    request<{ job_id: string; thread_id: string }>('/api/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: threadId, approved }),
+    }),
+
   jobs: {
     poll: (jobId: string) =>
       request<{ status: string; error?: string }>(`/api/jobs/${jobId}`),
   },
+
+  // Output files (resumes, cover letters, screenshots)
+  files: {
+    url: (path: string) => `/api/files?path=${encodeURIComponent(path)}`,
+    text: (path: string) =>
+      fetch(`/api/files?path=${encodeURIComponent(path)}`).then(r => (r.ok ? r.text() : '')),
+  },
 }
 
-export function createSSE(threadId: string, onMessage: (msg: string) => void): () => void {
+export function createSSE(
+  threadId: string,
+  onMessage: (msg: string) => void,
+  onControl?: (signal: 'done' | 'error' | 'interrupt') => void,
+): () => void {
   const source = new EventSource(`/api/stream/${threadId}`)
   source.onmessage = (e) => {
     const msg = e.data as string
-    if (!msg.startsWith('__DONE__') && !msg.startsWith('__ERROR__')) {
-      onMessage(msg)
-    }
+    if (msg.startsWith('__INTERRUPT__')) { onControl?.('interrupt'); return }
+    if (msg.startsWith('__DONE__'))      { onControl?.('done');      return }
+    if (msg.startsWith('__ERROR__'))     { onControl?.('error');     return }
+    onMessage(msg)
   }
   return () => source.close()
 }

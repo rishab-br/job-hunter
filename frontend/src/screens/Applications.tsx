@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { FileText, Play, ExternalLink } from 'lucide-react'
+import { FileText, Play, ExternalLink, ShieldCheck, Bell } from 'lucide-react'
 import { Pill, Topbar, Button, EmptyState } from '../components/ui'
 import { api } from '../api'
-import type { Application, ModuleState } from '../types'
+import type { Application, ModuleState, PendingApproval } from '../types'
 
 interface ApplicationsProps {
   threadId: string | null
   moduleState: ModuleState
   onRunModule: (key: string) => void
+  onSeedTestJob: () => void
   activeJobId: string | null
 }
 
@@ -19,14 +20,17 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'emerald' | 'cyan'
   interview_scheduled:  { label: 'Interview ✓',        variant: 'emerald' },
   offer:                { label: 'Offer! 🎉',          variant: 'violet'  },
   rejected:             { label: 'Rejected',           variant: 'red'     },
+  unknown:              { label: 'Applied',            variant: 'muted'   },
 }
 
-export default function Applications({ threadId, moduleState, onRunModule, activeJobId }: ApplicationsProps) {
-  const [apps, setApps] = useState<Application[]>([])
+export default function Applications({ threadId, moduleState, onRunModule, onSeedTestJob, activeJobId }: ApplicationsProps) {
+  const [apps,    setApps]    = useState<Application[]>([])
+  const [pending, setPending] = useState<PendingApproval | null>(null)
 
   useEffect(() => {
     if (!threadId) return
     api.sessions.applications(threadId).then(d => setApps(d.applications ?? [])).catch(() => {})
+    api.sessions.pending(threadId).then(p => setPending(p.awaiting ? p : null)).catch(() => {})
   }, [threadId, moduleState.status])
 
   // Group by status for mini summary
@@ -38,6 +42,10 @@ export default function Applications({ threadId, moduleState, onRunModule, activ
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <Topbar breadcrumb="Applications">
+        <Button size="sm" onClick={onSeedTestJob} disabled={!!activeJobId}>
+          <ShieldCheck size={11} />
+          Demo Approval Gate
+        </Button>
         <Button variant="primary" size="sm" onClick={() => onRunModule('application')} disabled={!!activeJobId || moduleState.status === 'running'}>
           <Play size={10} />
           {moduleState.status === 'running' ? 'Applying…' : 'Apply to Queued'}
@@ -45,6 +53,27 @@ export default function Applications({ threadId, moduleState, onRunModule, activ
       </Topbar>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+        {/* Approval gate banner — shown when pipeline is paused awaiting a decision */}
+        {pending?.awaiting && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl border animate-fade-in"
+            style={{ background: 'rgba(0,212,255,0.06)', borderColor: 'rgba(0,212,255,0.25)' }}
+          >
+            <Bell size={15} className="text-cyan-400 flex-shrink-0 animate-dot-pulse" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-semibold text-cyan-300">Pipeline paused — awaiting your approval</span>
+              {pending.job && (
+                <span className="text-xs text-slate-500 ml-2">
+                  {pending.job.job_title} at {pending.job.company}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-mono text-cyan-600 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20">
+              LangGraph interrupt()
+            </span>
+          </div>
+        )}
 
         {/* Status summary pills */}
         {apps.length > 0 && (

@@ -130,5 +130,25 @@ export interface ModuleState {
   metric?: string | number
 }
 
+export interface PendingApprovalJob {
+  job_id: string
+  job_title: string
+  company: string
+  platform: string
+  job_url: string
+  resume_path?: string
+  cover_letter_path?: string
+  cover_letter_content?: string
+  form_screenshot_path?: string
+  filled_fields?: Record<string, string>
+}
+
+export interface PendingApproval {
+  awaiting: boolean
+  message?: string
+  job?: PendingApprovalJob
+  remaining?: number
+}
+
 export type Screen = 'dashboard' | 'github' | 'discovery' | 'applications' | 'offers' | 'interview'
 export type ModalType = null | 'new-session' | 'offer' | 'prep'

@@ -224,6 +224,7 @@ def _worker(
         from orchestrator.master import inject_offer as _inject_offer
 
         config = {"configurable": {"thread_id": thread_id}}
+        uses_checkpointer = False
 
         # ── Offer / Interview Prep: need injection + master graph ──────────────
         if module == "offer":
@@ -236,6 +237,7 @@ def _worker(
                 deadline_date=extra.get("deadline_date"),
             )
             graph = compile_graph()
+            uses_checkpointer = True
 
         elif module == "interview_prep":
             from orchestrator.master import compile_graph
@@ -248,12 +250,15 @@ def _worker(
                 job_id=extra.get("job_id"),
             )
             graph = compile_graph()
+            uses_checkpointer = True
 
         elif module == "application":
-            # Application engine needs master graph for MemorySaver interrupt/resume
+            # Application engine needs the master graph + shared checkpointer for
+            # interrupt/resume at the human approval gate.
             from orchestrator.master import compile_graph
             state = {**state, "current_phase": SystemPhase.APPLYING}
             graph = compile_graph()
+            uses_checkpointer = True
 
         elif module in _STANDALONE_SUBGRAPHS:
             # Run the subgraph directly — avoids cascading to next pipeline phase
@@ -270,6 +275,7 @@ def _worker(
         else:
             from orchestrator.master import compile_graph
             graph = compile_graph()
+            uses_checkpointer = True
 
         prev_log_count = len(state.get("logs") or [])
         final_state = dict(state)
@@ -284,12 +290,124 @@ def _worker(
                 prev_log_count = len(current_logs)
                 final_state.update(node_state)
 
+        # ── Interrupt detection (human approval gate) ──────────────────────────
+        if uses_checkpointer:
+            snap = graph.get_state(config)
+            interrupts = _extract_interrupts(snap)
+            if snap.next and interrupts:
+                # Graph paused awaiting human approval — persist and signal the UI
+                final_state = dict(snap.values or final_state)
+                save_session(thread_id, final_state, user_id=user_id)
+                _push(thread_id, "[human_approval_gate] ⏸ Awaiting your approval — review the application.")
+                _push(thread_id, f"__INTERRUPT__{job_id}")
+                _jobs[job_id]["status"] = "awaiting_approval"
+                return
+            final_state = dict(snap.values or final_state)
+
         save_session(thread_id, final_state, user_id=user_id)
         _push(thread_id, f"__DONE__{job_id}")
         _jobs[job_id]["status"] = "done"
 
     except Exception as exc:
         _push(thread_id, f"[ERROR] {exc}")
+        _push(thread_id, f"__ERROR__{job_id}")
+        _jobs[job_id].update({"status": "failed", "error": str(exc)})
+        traceback.print_exc()
+
+
+# ── Human Approval Gate — interrupt inspection & resume ───────────────────────
+
+def _extract_interrupts(snapshot) -> List[dict]:
+    """Pull interrupt payloads (the dicts passed to interrupt(...)) from a state snapshot."""
+    out: List[dict] = []
+    for task in getattr(snapshot, "tasks", ()) or ():
+        for intr in (getattr(task, "interrupts", ()) or ()):
+            val = getattr(intr, "value", None)
+            if isinstance(val, dict):
+                out.append(val)
+    return out
+
+
+def get_pending_approval(thread_id: str) -> dict:
+    """
+    Inspects the checkpointed graph for a pending human-approval interrupt.
+    Returns the current application under review, or {"awaiting": False}.
+    """
+    from orchestrator.master import compile_graph
+    graph = compile_graph()  # shared checkpointer
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        snap = graph.get_state(config)
+    except Exception:
+        return {"awaiting": False}
+
+    interrupts = _extract_interrupts(snap)
+    if not snap.next or not interrupts:
+        return {"awaiting": False}
+
+    current = interrupts[0]
+    job = current.get("job", {}) if isinstance(current, dict) else {}
+
+    # Count how many applications still need review (queued, not yet decided)
+    values = snap.values or {}
+    total_queued = len(values.get("pending_approvals") or [])
+
+    return {
+        "awaiting":  True,
+        "message":   current.get("message", ""),
+        "job":       job,
+        "remaining": total_queued,
+    }
+
+
+def resume_application(thread_id: str, approved: bool, user_id: str = None) -> str:
+    """Resume a graph paused at the human approval gate, in the background."""
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "queued", "thread_id": thread_id, "error": None}
+    _executor.submit(_resume_worker, job_id, thread_id, approved, user_id)
+    return job_id
+
+
+def _resume_worker(job_id: str, thread_id: str, approved: bool, user_id: str = None) -> None:
+    try:
+        _jobs[job_id]["status"] = "running"
+        from orchestrator.master import compile_graph
+        from langgraph.types import Command
+
+        graph  = compile_graph()  # shared checkpointer
+        config = {"configurable": {"thread_id": thread_id}}
+
+        decision = "APPROVED ✓" if approved else "SKIPPED"
+        _push(thread_id, f"[human_approval_gate] {decision} — resuming pipeline...")
+
+        prev = graph.get_state(config).values or {}
+        prev_log_count = len(prev.get("logs") or [])
+
+        for chunk in graph.stream(Command(resume={"approved": approved}), config=config, stream_mode="updates"):
+            for _node, node_state in chunk.items():
+                if not isinstance(node_state, dict):
+                    continue
+                logs = list(node_state.get("logs") or [])
+                for line in logs[prev_log_count:]:
+                    _push(thread_id, line)
+                prev_log_count = len(logs)
+
+        snap = graph.get_state(config)
+        interrupts = _extract_interrupts(snap)
+        final_state = dict(snap.values or {})
+        save_session(thread_id, final_state, user_id=user_id)
+
+        if snap.next and interrupts:
+            # Another application is queued for review
+            _push(thread_id, "[human_approval_gate] ⏸ Next application awaiting approval.")
+            _push(thread_id, f"__INTERRUPT__{job_id}")
+            _jobs[job_id]["status"] = "awaiting_approval"
+        else:
+            _push(thread_id, f"__DONE__{job_id}")
+            _jobs[job_id]["status"] = "done"
+
+    except Exception as exc:
+        _push(thread_id, f"[ERROR] resume failed: {exc}")
         _push(thread_id, f"__ERROR__{job_id}")
         _jobs[job_id].update({"status": "failed", "error": str(exc)})
         traceback.print_exc()
