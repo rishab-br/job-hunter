@@ -6,6 +6,7 @@ from backend.models import (
     RunPrepRequest,
     InjectOfferRequest,
     ResumeRequest,
+    SaveFileRequest,
     JobStatusResponse,
 )
 from backend import runner
@@ -191,6 +192,23 @@ async def serve_output_file(path: str):
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(404, "File not found")
     return FileResponse(resolved)
+
+
+@router.post("/api/files/save")
+async def save_output_file(req: SaveFileRequest):
+    """
+    Overwrite an output file (resume / cover letter) with human-edited content.
+    Path-traversal protected — only files within outputs/ can be written.
+    """
+    try:
+        resolved = Path(req.path).resolve()
+    except Exception:
+        raise HTTPException(400, "Invalid path")
+    if _OUTPUTS_ROOT not in resolved.parents:
+        raise HTTPException(403, "Access denied — file is outside outputs/")
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(req.content, encoding="utf-8")
+    return {"status": "saved", "path": str(resolved)}
 
 
 # ── Test-job seeder (demo the approval gate without scraping) ───────────────────

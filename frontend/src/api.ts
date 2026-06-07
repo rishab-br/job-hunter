@@ -65,6 +65,12 @@ export const api = {
     url: (path: string) => `/api/files?path=${encodeURIComponent(path)}`,
     text: (path: string) =>
       fetch(`/api/files?path=${encodeURIComponent(path)}`).then(r => (r.ok ? r.text() : '')),
+    save: (path: string, content: string) =>
+      request<{ status: string; path: string }>('/api/files/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content }),
+      }),
   },
 }
 

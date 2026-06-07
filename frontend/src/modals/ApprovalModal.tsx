@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   ShieldCheck, FileText, Mail, Image as ImageIcon, ExternalLink,
-  Check, X, Loader2, AlertTriangle, MapPin,
+  Check, X, Loader2, AlertTriangle, MapPin, Pencil, Save, RotateCcw,
 } from 'lucide-react'
 import { api } from '../api'
 import type { PendingApproval } from '../types'
@@ -25,8 +25,21 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
   const [coverText, setCoverText]   = useState<string>('')
   const [loadingDoc, setLoadingDoc] = useState(false)
 
-  // Reset to first tab whenever a new application surfaces
-  useEffect(() => { setTab('resume') }, [job?.job_id])
+  // Edit state
+  const [editing,   setEditing]   = useState(false)
+  const [draft,     setDraft]     = useState('')
+  const [saving,    setSaving]    = useState(false)
+  const [editedDocs, setEditedDocs] = useState<Set<string>>(new Set())
+
+  // Reset everything when a new application surfaces
+  useEffect(() => {
+    setTab('resume')
+    setEditing(false)
+    setEditedDocs(new Set())
+  }, [job?.job_id])
+
+  // Leaving a tab cancels an in-progress edit
+  useEffect(() => { setEditing(false) }, [tab])
 
   // Fetch resume markdown
   useEffect(() => {
@@ -54,6 +67,34 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
   const accent = PLATFORM_COLOR[job.platform] ?? '#00D4FF'
   const filledFields = Object.entries(job.filled_fields ?? {}).filter(([k]) => k !== 'note')
 
+  // Current document context for the active tab
+  const docCtx = tab === 'resume'
+    ? { text: resumeText, path: job.resume_path, set: setResumeText, key: 'resume' }
+    : tab === 'cover'
+    ? { text: coverText, path: job.cover_letter_path, set: setCoverText, key: 'cover' }
+    : null
+
+  function startEdit() {
+    if (!docCtx) return
+    setDraft(docCtx.text)
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    if (!docCtx?.path) return
+    setSaving(true)
+    try {
+      await api.files.save(docCtx.path, draft)
+      docCtx.set(draft)
+      setEditedDocs(prev => new Set(prev).add(docCtx.key))
+      setEditing(false)
+    } catch {
+      /* keep editing so the user doesn't lose their text */
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md modal-backdrop p-6">
       <div className="modal-content w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden"
@@ -77,7 +118,7 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Review everything before this application is submitted. Nothing is sent without your approval.
+                  Review &amp; revise everything before this application is submitted. Nothing is sent without your approval.
                 </p>
               </div>
             </div>
@@ -118,6 +159,7 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
             { id: 'form',   label: 'Form Preview',    icon: <ImageIcon size={13} /> },
           ] as { id: Tab; label: string; icon: React.ReactNode }[]).map(t => {
             const active = tab === t.id
+            const wasEdited = editedDocs.has(t.id)
             return (
               <button
                 key={t.id}
@@ -128,19 +170,65 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
                   : { color: '#64748b', borderBottom: '2px solid transparent' }}
               >
                 {t.icon}{t.label}
+                {wasEdited && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Edited" />}
               </button>
             )
           })}
+
+          {/* Edit / Save controls (resume + cover only) */}
+          {docCtx && (
+            <div className="ml-auto flex items-center gap-2 pb-1">
+              {!editing ? (
+                <button
+                  onClick={startEdit}
+                  disabled={!docCtx.path}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}
+                >
+                  <Pencil size={11} /> Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#64748b' }}
+                  >
+                    <RotateCcw size={11} /> Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                    style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', color: '#00D4FF' }}
+                  >
+                    {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} Save
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Content ── */}
         <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-          {tab === 'resume' && (
-            <DocView loading={loadingDoc} text={resumeText} emptyHint="No resume generated yet." />
+          {(tab === 'resume' || tab === 'cover') && (
+            editing ? (
+              <textarea
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                spellCheck={false}
+                className="w-full h-full min-h-[340px] rounded-xl border border-cyan-500/30 bg-[#0A0D14] p-5 text-sm text-slate-200 font-mono leading-relaxed outline-none focus:border-cyan-500/50 resize-none"
+              />
+            ) : (
+              <DocView
+                loading={tab === 'resume' && loadingDoc}
+                text={docCtx?.text ?? ''}
+                emptyHint={tab === 'resume' ? 'No resume generated yet.' : 'No cover letter generated yet.'}
+              />
+            )
           )}
-          {tab === 'cover' && (
-            <DocView loading={false} text={coverText} emptyHint="No cover letter generated yet." />
-          )}
+
           {tab === 'form' && (
             <div className="space-y-4">
               {job.form_screenshot_path ? (
@@ -179,13 +267,24 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
         <div className="px-6 py-4 border-t border-white/[0.07] flex-shrink-0 flex items-center justify-between"
              style={{ background: 'rgba(0,0,0,0.3)' }}>
           <div className="flex items-center gap-2 text-xs text-slate-600">
-            <MapPin size={12} />
-            Pipeline is paused — your decision resumes it.
+            {editedDocs.size > 0 ? (
+              <>
+                <Check size={12} className="text-emerald-400" />
+                <span className="text-emerald-500/80">
+                  {editedDocs.size} document{editedDocs.size > 1 ? 's' : ''} edited — your version will be submitted.
+                </span>
+              </>
+            ) : (
+              <>
+                <MapPin size={12} />
+                Pipeline is paused — your decision resumes it.
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => onDecision(false)}
-              disabled={submitting}
+              disabled={submitting || editing}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
             >
@@ -193,9 +292,10 @@ export default function ApprovalModal({ pending, onDecision, submitting }: Appro
             </button>
             <button
               onClick={() => onDecision(true)}
-              disabled={submitting}
+              disabled={submitting || editing}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#022c22', boxShadow: '0 0 20px rgba(16,185,129,0.3)' }}
+              title={editing ? 'Save or cancel your edit first' : undefined}
             >
               {submitting ? <><Loader2 size={15} className="animate-spin" /> Submitting…</> : <><Check size={15} /> Approve &amp; Submit</>}
             </button>

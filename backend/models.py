@@ -64,6 +64,11 @@ class ResumeRequest(BaseModel):
     approved: bool
 
 
+class SaveFileRequest(BaseModel):
+    path: str
+    content: str
+
+
 class JobStatusResponse(BaseModel):
     job_id: str
     status: str  # queued | running | done | failed
