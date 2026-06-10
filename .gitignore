@@ -3,6 +3,13 @@
 .env.local
 .env.example
 
+# Node
+node_modules/
+frontend/dist/
+
+# Graphify knowledge graph (regenerable via `graphify update .`)
+graphify-out/
+
 # Python
 __pycache__/
 *.py[cod]
