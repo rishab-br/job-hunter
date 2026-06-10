@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>JobHunter — Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body, #root { height: 100%; overflow: hidden; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #04060d;
+    color: #e2e8f0;
+  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  ::selection { background: rgba(0,212,255,0.3); }
+
+  #root {
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(0,212,255,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139,92,246,0.04) 0%, transparent 60%),
+      #04060d;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ── Pipeline flow ── */
+  @keyframes pipeFlow {
+    0%   { transform: translateX(-120%); }
+    100% { transform: translateX(220%);  }
+  }
+  .pipe-flow::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, currentColor 50%, transparent 100%);
+    animation: pipeFlow 2s linear infinite;
+  }
+
+  /* ── Glow ── */
+  @keyframes glowCyan {
+    0%,100% { box-shadow: 0 0 8px rgba(0,212,255,0.4),  0 0 24px rgba(0,212,255,0.15); }
+    50%      { box-shadow: 0 0 16px rgba(0,212,255,0.7), 0 0 48px rgba(0,212,255,0.25); }
+  }
+  .animate-glow-cyan { animation: glowCyan 2.5s ease-in-out infinite; }
+
+  /* ── Dot pulse ── */
+  @keyframes dotPulse {
+    0%,100% { opacity: 1; transform: scale(1);   }
+    50%      { opacity: .4; transform: scale(0.7); }
+  }
+  .animate-dot-pulse { animation: dotPulse 1.2s ease-in-out infinite; }
+
+  /* ── Fade / slide ── */
+  @keyframes fadeIn      { from { opacity:0; }                    to { opacity:1; }              }
+  @keyframes fadeSlideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .animate-fade-in  { animation: fadeIn      0.2s  ease-out; }
+  .animate-slide-up { animation: fadeSlideUp 0.25s ease-out; }
+  .log-line-enter   { animation: fadeSlideUp 0.15s ease-out; }
+
+  /* ── Shimmer (card running) ── */
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  .card-running { position: relative; overflow: hidden; }
+  .card-running::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #00D4FF, #7C3AED, #00D4FF, transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* ── Spin (loader) ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .animate-spin { animation: spin 1s linear infinite; }
+
+  /* ── Radar sweep ── */
+  @keyframes radarSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .radar-sweep { transform-origin: 18px 18px; animation: radarSweep 3s linear infinite; }
+  .radar-sweep-trail { transform-origin: 18px 18px; animation: radarSweep 3s linear infinite; animation-delay: -0.18s; }
+
+  /* ── Sidebar accent border ── */
+  .sidebar-border {
+    background: linear-gradient(180deg, rgba(0,212,255,0.6) 0%, rgba(0,212,255,0.15) 40%, transparent 100%);
+  }
+
+  /* ── Log terminal font ── */
+  .log-terminal {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.8;
+  }
+
+  /* ── Tailwind pseudo-fix: ensure these base utilities always generate ── */
+  .text-\[9px\]  { font-size: 9px;  }
+  .text-\[10px\] { font-size: 10px; }
+  .text-\[11px\] { font-size: 11px; }
+</style>
+<link id="gfont-Inter" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap">
+<link id="gfont-Roboto" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&amp;display=swap">
+<link id="gfont-Playfair-Display" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;600;700&amp;display=swap">
+<link id="gfont-Merriweather" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;500;600;700&amp;display=swap">
+</head>
+<body style="font-family: Merriweather">
+<div id="root"></div>
+
+<script type="text/babel" src="jh-icons.jsx"></script>
+<script type="text/babel" src="jh-ui.jsx"></script>
+<script type="text/babel" src="jh-dashboard.jsx"></script>
+<script type="text/babel" src="jh-screens.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="jh-app.jsx"></script>
+</body>
+</html>

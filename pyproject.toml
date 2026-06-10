@@ -36,3 +36,7 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["."]
+markers = [
+    "network: hits live external APIs (excluded in CI via -m 'not network')",
+]

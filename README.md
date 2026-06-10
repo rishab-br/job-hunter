@@ -26,10 +26,11 @@
 JobHunter is a production-grade agentic AI system that handles the entire job search lifecycle as a stateful, resumable pipeline. Each stage is an independent **Lead Agent** with its own worker graph — they share a single `GlobalState` and are orchestrated by a **Master Orchestrator** built on LangGraph.
 
 ```
-GitHub Portfolio Audit  →  Job Discovery  →  Application Engine  →  Status Tracking  →  Offer Intelligence
-       ↑                                             ↑
-  Improvement Plan                         Human Approval Gate
-  (10 prioritised actions)                 (LangGraph interrupt())
+GitHub Portfolio Audit → Job Discovery → Application Engine → Status Tracking → Offer Intelligence → Interview Prep
+       ↑                      ↑                  ↑
+  Improvement Plan      Job Enricher     Human Approval Gate
+  (10 prioritised       (page fetch +    (LangGraph interrupt())
+   actions)              web context)
 ```
 
 > **No application is ever submitted without your explicit approval.** The human-in-the-loop gate is a first-class LangGraph `interrupt()`, not a workaround.
@@ -56,9 +57,10 @@ GitHub Portfolio Audit  →  Job Discovery  →  Application Engine  →  Status
 
 | Worker | What it does |
 |--------|-------------|
-| **LinkedIn Scraper** | Playwright → authenticated search → up to 25 listings with full JD |
+| **LinkedIn Scraper** | httpx → LinkedIn's public guest jobs API — **zero login, zero cookies, zero ban risk**. Handles regional subdomains + tracking-param stripping |
 | **Indeed Scraper** | Playwright → no login required → paginate across 3 pages → 25 listings |
 | **Naukri Scraper** | Playwright → SEO URL + query-param fallback → new-tab JD extraction |
+| **Job Enricher** | Two-phase: concurrent httpx fetch of each job's public detail page (descriptions the guest API omits) + DuckDuckGo company-context search appended to every JD |
 | **JD Analyzer** | LLM → extracts must-have skills, seniority, red flags, company signals per JD |
 | **Relevance Scorer** | LLM → 0–100 match score against your full profile, sorted &amp; prioritised |
 
@@ -126,6 +128,8 @@ GitHub Portfolio Audit  →  Job Discovery  →  Application Engine  →  Status
 | Single `GlobalState` TypedDict | All 6 lead agents and 30+ workers share one schema; the Master Orchestrator routes on `current_phase` |
 | Standalone subgraph execution | Individual module runs bypass the master graph — prevents unintended cascading to downstream phases |
 | Dedicated `skills/` layer | Workers never import Playwright or the GitHub API directly — all I/O goes through `skills/` |
+| Guest-mode LinkedIn scraping | Deliberate pivot away from authenticated automation: the public guest API needs no account, so there is no account to ban and no stored credentials to leak |
+| Enrich-after-scrape pattern | The guest API returns thin listings; a separate enricher node concurrently fetches public job pages + web context, so scraping stays fast and ban-safe while JDs stay rich |
 | Groq primary, Gemini fallback | Groq's Llama 3.3 70B is fast and cheap for structured extraction; Gemini 2.5 Flash handles JSON-mode fallback |
 | FastAPI + SSE streaming | Backend streams agent log lines to the React dashboard in real time via Server-Sent Events |
 
@@ -150,6 +154,7 @@ GitHub Portfolio Audit  →  Job Discovery  →  Application Engine  →  Status
 | Agent framework | [LangGraph](https://langchain-ai.github.io/langgraph/) — StateGraph, subgraphs, MemorySaver |
 | LLM routing | [Groq](https://groq.com) (Llama 3.3 70B) + [Gemini](https://ai.google.dev) (2.5 Flash) fallback |
 | Browser automation | [Playwright](https://playwright.dev/) — anti-detection, multi-tab, screenshot |
+| HTTP scraping | [httpx](https://www.python-httpx.org/) — LinkedIn guest API, job-page enrichment, DuckDuckGo context |
 | Backend | [FastAPI](https://fastapi.tiangolo.com) + SSE streaming |
 | Frontend | [React 18](https://react.dev) + TypeScript + [Vite](https://vitejs.dev) + [Tailwind CSS](https://tailwindcss.com) |
 | GitHub data | [PyGithub](https://pygithub.readthedocs.io/) + GitHub OAuth |
@@ -169,7 +174,7 @@ JobHunter/
 │
 ├── agents/
 │   ├── github_intelligence/         # Lead + 5 workers
-│   ├── job_discovery/               # Lead + 5 workers + 3 platform scrapers
+│   ├── job_discovery/               # Lead + 3 scrapers + enricher + analyzer + scorer
 │   ├── application_engine/          # Lead + 5 workers (incl. human approval gate)
 │   ├── status_tracker/              # Lead + 4 workers
 │   ├── offer_intelligence/          # Lead + 6 workers
@@ -224,14 +229,13 @@ Edit `.env` — minimum required keys:
 
 ```env
 GEMINI_API_KEY=...          # Primary LLM
-GROQ_API_KEY=...            # Fast inference (optional but recommended)
+GROQ_API_KEY_1=...          # App Groq key (optional but recommended)
+GROQ_API_KEY_2=...          # Graphify Groq key
 GITHUB_TOKEN=...            # For GitHub Intelligence
 GITHUB_USERNAME=...
-
-# Optional — needed for LinkedIn scraping
-LINKEDIN_EMAIL=...
-LINKEDIN_PASSWORD=...
 ```
+
+> LinkedIn job discovery needs **no credentials** — it uses the public guest API.
 
 ### 3. Start the dashboard
 
@@ -295,7 +299,8 @@ All generated files land in `outputs/` (gitignored — contains personal data):
 ## Roadmap
 
 - [x] GitHub Intelligence — portfolio audit + gap analysis + improvement plan
-- [x] Job Discovery — LinkedIn / Indeed / Naukri scrapers with anti-detection
+- [x] Job Discovery — LinkedIn (guest API, no login) / Indeed / Naukri scrapers
+- [x] Job Enricher — concurrent description fetch + DuckDuckGo company context
 - [x] Application Engine — resume + cover letter tailoring + form filling
 - [x] Human Approval Gate — LangGraph `interrupt()` before every submission
 - [x] Status Tracker — application monitoring + follow-up scheduling + ghosted detection
@@ -313,7 +318,7 @@ All generated files land in `outputs/` (gitignored — contains personal data):
 
 ## Disclaimer
 
-Built for personal job search use. Automated interactions with LinkedIn, Indeed, and Naukri may conflict with their Terms of Service. The system is intentionally designed with a **human approval gate before every form submission** — no application is ever auto-submitted.
+Built for personal job search use. LinkedIn job discovery deliberately uses only the **public guest API** — no account, no cookies, no authenticated automation. Automated interactions with Indeed and Naukri may conflict with their Terms of Service. The system is intentionally designed with a **human approval gate before every form submission** — no application is ever auto-submitted.
 
 ---
 

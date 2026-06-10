@@ -1,0 +1,13 @@
+services:
+  jobhunter:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Generated artifacts (resumes, cover letters, reports) persist on the host
+      - ./outputs:/app/outputs
+      - ./memory:/app/memory
+      - ./user_data:/app/user_data
+    restart: unless-stopped

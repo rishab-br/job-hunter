@@ -1,7 +1,10 @@
+import pytest
+
 from state import initial_state
 from agents.github_intelligence.workers.profile_auditor import run
 
 
+@pytest.mark.network  # hits the live GitHub API — excluded in CI
 def test_profile_auditor_returns_state():
     state = initial_state(
         github_username="testuser",
