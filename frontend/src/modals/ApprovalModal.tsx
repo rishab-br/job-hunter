@@ -16,6 +16,7 @@ type Tab = 'resume' | 'cover' | 'form'
 
 const PLATFORM_COLOR: Record<string, string> = {
   LinkedIn: '#00D4FF', Indeed: '#F59E0B', Naukri: '#EF4444',
+  Greenhouse: '#10B981', Lever: '#8B5CF6',
 }
 
 export default function ApprovalModal({ pending, onDecision, submitting }: ApprovalModalProps) {

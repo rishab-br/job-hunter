@@ -103,3 +103,30 @@ def call_json(system: str, user: str, max_tokens: int = 4096) -> dict | list:
     except json.JSONDecodeError as e:
         log.error(f"Gemini returned invalid JSON: {e}")
         raise
+
+
+# ── Embeddings ────────────────────────────────────────────────────────────────
+
+EMBED_MODEL = "gemini-embedding-001"
+_EMBED_BATCH = 100   # Gemini embed_content limit per request
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Embed texts with Gemini's embedding model. Raises on failure —
+    callers decide whether to degrade (e.g. scorer falls back to full LLM pass)."""
+    vectors: list[list[float]] = []
+    client = get_gemini()
+    for i in range(0, len(texts), _EMBED_BATCH):
+        batch = texts[i : i + _EMBED_BATCH]
+        resp = client.models.embed_content(model=EMBED_MODEL, contents=batch)
+        vectors.extend(e.values for e in resp.embeddings)
+    return vectors
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)

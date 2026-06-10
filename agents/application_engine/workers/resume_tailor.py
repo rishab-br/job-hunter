@@ -21,10 +21,20 @@ def run(state: GlobalState) -> GlobalState:
 
     for job in target_jobs:
         resume_md = _tailor_resume(profile, job, state)
-        filename = _safe_filename(job.get("company", "company"), job.get("title", "role")) + "_resume.md"
-        path = file_tools.save_text(resume_md, "resumes", filename)
-        job["resume_path"] = str(path)
-        logs.append(f"[resume_tailor] Saved resume → {path}")
+        base = _safe_filename(job.get("company", "company"), job.get("title", "role"))
+        md_path = file_tools.save_text(resume_md, "resumes", base + "_resume.md")
+        job["resume_md_path"] = str(md_path)
+        logs.append(f"[resume_tailor] Saved resume → {md_path}")
+
+        # PDF is what gets uploaded to application forms; markdown stays the
+        # editable source of truth.
+        try:
+            pdf_path = file_tools.save_pdf_from_markdown(resume_md, "resumes", base + "_resume.pdf")
+            job["resume_path"] = str(pdf_path)
+            logs.append(f"[resume_tailor] Rendered PDF → {pdf_path}")
+        except Exception as exc:
+            job["resume_path"] = str(md_path)   # degrade gracefully
+            logs.append(f"[resume_tailor] PDF render failed ({exc}) — using markdown file.")
 
     return {
         **state,

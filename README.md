@@ -60,9 +60,10 @@ GitHub Portfolio Audit → Job Discovery → Application Engine → Status Track
 | **LinkedIn Scraper** | httpx → LinkedIn's public guest jobs API — **zero login, zero cookies, zero ban risk**. Handles regional subdomains + tracking-param stripping |
 | **Indeed Scraper** | Playwright → no login required → paginate across 3 pages → 25 listings |
 | **Naukri Scraper** | Playwright → SEO URL + query-param fallback → new-tab JD extraction |
+| **ATS Boards Scraper** | Greenhouse + Lever **public JSON APIs** — structured postings with full JDs, zero scraping fragility. Boards come from a seed list + DuckDuckGo discovery of companies hiring your target role |
 | **Job Enricher** | Two-phase: concurrent httpx fetch of each job's public detail page (descriptions the guest API omits) + DuckDuckGo company-context search appended to every JD |
 | **JD Analyzer** | LLM → extracts must-have skills, seniority, red flags, company signals per JD |
-| **Relevance Scorer** | LLM → 0–100 match score against your full profile, sorted &amp; prioritised |
+| **Relevance Scorer** | Embedding pre-filter (Gemini `gemini-embedding-001`, cosine top-K) → LLM scores only the best candidates → 0–100 match score, sorted &amp; prioritised |
 
 </details>
 
@@ -71,11 +72,11 @@ GitHub Portfolio Audit → Job Discovery → Application Engine → Status Track
 
 | Worker | What it does |
 |--------|-------------|
-| **Resume Tailor** | LLM → ATS-optimised resume mirroring the JD → `outputs/resumes/` |
+| **Resume Tailor** | LLM → ATS-optimised resume mirroring the JD → Markdown source + **rendered PDF** (headless Chromium) in `outputs/resumes/` |
 | **Cover Letter Writer** | LLM → role + company-specific 3-paragraph letter → `outputs/cover_letters/` |
 | **Form Filler** | Playwright → fills every field on LinkedIn / Indeed / Naukri, takes screenshot |
 | **⚠️ Human Approval Gate** | `LangGraph interrupt()` — pipeline pauses, you review docs + screenshot before anything is submitted |
-| **Submission Executor** | Playwright → clicks Submit *only* after your explicit approval |
+| **Submission Executor** | Playwright → clicks Submit *only* after your explicit approval. **Greenhouse and Lever forms are public** (standardised fields, PDF resume upload) — the only platforms where a true end-to-end apply works with no login |
 
 </details>
 
@@ -130,6 +131,8 @@ GitHub Portfolio Audit → Job Discovery → Application Engine → Status Track
 | Dedicated `skills/` layer | Workers never import Playwright or the GitHub API directly — all I/O goes through `skills/` |
 | Guest-mode LinkedIn scraping | Deliberate pivot away from authenticated automation: the public guest API needs no account, so there is no account to ban and no stored credentials to leak |
 | Enrich-after-scrape pattern | The guest API returns thin listings; a separate enricher node concurrently fetches public job pages + web context, so scraping stays fast and ban-safe while JDs stay rich |
+| ATS-first submission | Greenhouse/Lever publish jobs as public JSON APIs and accept applications through public forms — structured data in, real submissions out, no ToS gray zone |
+| Embeddings before LLM scoring | When discovery returns more than 20 jobs, a cosine pre-filter (3072-dim Gemini embeddings) discards poor fits before the LLM sees them — scoring cost stays flat as sources grow |
 | Groq primary, Gemini fallback | Groq's Llama 3.3 70B is fast and cheap for structured extraction; Gemini 2.5 Flash handles JSON-mode fallback |
 | FastAPI + SSE streaming | Backend streams agent log lines to the React dashboard in real time via Server-Sent Events |
 
@@ -301,6 +304,9 @@ All generated files land in `outputs/` (gitignored — contains personal data):
 - [x] GitHub Intelligence — portfolio audit + gap analysis + improvement plan
 - [x] Job Discovery — LinkedIn (guest API, no login) / Indeed / Naukri scrapers
 - [x] Job Enricher — concurrent description fetch + DuckDuckGo company context
+- [x] Greenhouse + Lever — public JSON API discovery + real end-to-end form submission
+- [x] Resume PDF rendering — Markdown → styled PDF via headless Chromium
+- [x] Embedding pre-filter — Gemini embeddings rank jobs before LLM scoring
 - [x] Application Engine — resume + cover letter tailoring + form filling
 - [x] Human Approval Gate — LangGraph `interrupt()` before every submission
 - [x] Status Tracker — application monitoring + follow-up scheduling + ghosted detection

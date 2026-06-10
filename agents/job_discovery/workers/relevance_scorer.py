@@ -4,6 +4,12 @@ from state import GlobalState
 
 BATCH_SIZE = 10
 
+# Embedding pre-filter: when more than this many jobs survive analysis, rank
+# them by embedding similarity to the profile and LLM-score only the top K.
+# Cuts scoring tokens ~linearly with the discard rate.
+PREFILTER_THRESHOLD = 20
+PREFILTER_KEEP      = 20
+
 
 def run(state: GlobalState) -> GlobalState:
     logs = list(state.get("logs") or [])
@@ -31,6 +37,17 @@ def run(state: GlobalState) -> GlobalState:
         meta = job_meta_by_id.get(analysis["job_id"], {})
         merged.append({**meta, **analysis})
 
+    # Embedding pre-filter — cheap similarity ranking before expensive LLM scoring
+    if len(merged) > PREFILTER_THRESHOLD:
+        try:
+            merged = _embedding_prefilter(merged, profile_summary, PREFILTER_KEEP)
+            logs.append(
+                f"[relevance_scorer] Embedding pre-filter kept top {len(merged)} "
+                f"of {len(analyzed_jds)} jobs for LLM scoring."
+            )
+        except Exception as exc:
+            logs.append(f"[relevance_scorer] Pre-filter unavailable ({exc}) — scoring all jobs.")
+
     scored: list[dict] = []
     batches = [merged[i : i + BATCH_SIZE] for i in range(0, len(merged), BATCH_SIZE)]
 
@@ -52,6 +69,31 @@ def run(state: GlobalState) -> GlobalState:
         "scored_jobs": scored,
         "logs": logs,
     }
+
+
+def _embedding_prefilter(jobs: list[dict], profile: dict, keep: int) -> list[dict]:
+    """Rank jobs by cosine similarity between profile and job embeddings; keep top K."""
+    profile_text = (
+        f"{profile.get('target_role', '')} {profile.get('target_niche', '')}. "
+        f"Languages: {', '.join(profile.get('top_languages') or [])}. "
+        f"Strengths: {', '.join(profile.get('existing_strengths') or [])}."
+    )
+    job_texts = [
+        f"{j.get('title', '')} at {j.get('company', '')}. "
+        f"Skills: {', '.join(j.get('must_have_skills') or [])}. "
+        f"{j.get('role_summary') or ''}"
+        for j in jobs
+    ]
+
+    vectors = llm.embed_texts([profile_text] + job_texts)
+    profile_vec, job_vecs = vectors[0], vectors[1:]
+
+    ranked = sorted(
+        zip(jobs, job_vecs),
+        key=lambda pair: llm.cosine_similarity(profile_vec, pair[1]),
+        reverse=True,
+    )
+    return [job for job, _ in ranked[:keep]]
 
 
 def _build_profile_summary(audit: dict, depth_reports: list, gap: dict, state: GlobalState) -> dict:

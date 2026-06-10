@@ -75,6 +75,10 @@ def _submit(item: dict, profile: dict, platform: str) -> dict:
                 status = _submit_indeed(page, item, profile)
             elif p_lower == "naukri":
                 status = _submit_naukri(page, item, profile)
+            elif p_lower == "greenhouse":
+                status = _submit_greenhouse(page, item, profile)
+            elif p_lower == "lever":
+                status = _submit_lever(page, item, profile)
             else:
                 status = "platform_not_supported"
 
@@ -194,6 +198,147 @@ def _submit_naukri(page: Page, item: dict, profile: dict) -> str:
         return "submitted"
 
     return "submit_button_not_reached"
+
+
+def _submit_greenhouse(page: Page, item: dict, profile: dict) -> str:
+    """
+    Greenhouse application forms are public — no login required.
+    Classic boards.greenhouse.io pages embed the form with #first_name/#last_name
+    ID conventions; newer job-boards.greenhouse.io pages use name attributes.
+    """
+    personal = profile.get("personal", {})
+    first, last = _split_name(personal.get("full_name", ""))
+
+    page.goto(item["job_url"], wait_until="networkidle")
+    _delay(2, 3)
+
+    # Newer GH pages put the form behind an Apply button/tab
+    for sel in ("button:has-text('Apply')", "a:has-text('Apply Now')", "a[href*='#app']"):
+        btn = page.query_selector(sel)
+        if btn:
+            try:
+                btn.click()
+                _delay(1, 2)
+            except Exception:
+                pass
+            break
+
+    field_map = {
+        "#first_name, input[name='first_name']":           first,
+        "#last_name, input[name='last_name']":             last,
+        "#email, input[type='email'], input[name='email']": personal.get("email", ""),
+        "#phone, input[name='phone']":                      personal.get("phone", ""),
+    }
+    filled_any = False
+    for selector, value in field_map.items():
+        if not value:
+            continue
+        try:
+            inp = page.query_selector(selector)
+            if inp and not inp.input_value():
+                inp.fill(value)
+                filled_any = True
+                _delay(0.3, 0.7)
+        except Exception:
+            continue
+
+    if not filled_any:
+        return "application_form_not_found"
+
+    _upload_resume(page, item)
+
+    if _captcha_present(page):
+        return "captcha_blocked"
+
+    for sel in ("#submit_app", "button[type='submit']:has-text('Submit')", "input[type='submit']"):
+        btn = page.query_selector(sel)
+        if btn:
+            btn.click()
+            page.wait_for_load_state("networkidle")
+            return "submitted"
+
+    return "submit_button_not_reached"
+
+
+def _submit_lever(page: Page, item: dict, profile: dict) -> str:
+    """
+    Lever apply pages (jobs.lever.co/<company>/<id>/apply) are public with a
+    fully standardised form: name / email / phone / org / resume.
+    """
+    personal = profile.get("personal", {})
+    apply_url = item.get("apply_url") or item["job_url"].rstrip("/") + "/apply"
+
+    page.goto(apply_url, wait_until="networkidle")
+    _delay(2, 3)
+
+    field_map = {
+        "input[name='name']":  personal.get("full_name", ""),
+        "input[name='email']": personal.get("email", ""),
+        "input[name='phone']": personal.get("phone", ""),
+        "input[name='org']":   personal.get("current_company", ""),
+        "input[name='urls[GitHub]']": personal.get("github_url", ""),
+    }
+    filled_any = False
+    for selector, value in field_map.items():
+        if not value:
+            continue
+        try:
+            inp = page.query_selector(selector)
+            if inp and not inp.input_value():
+                inp.fill(value)
+                filled_any = True
+                _delay(0.3, 0.7)
+        except Exception:
+            continue
+
+    if not filled_any:
+        return "application_form_not_found"
+
+    _upload_resume(page, item, selector="input[name='resume'], input[type='file']")
+    _delay(2, 4)   # Lever parses the resume server-side after upload
+
+    if _captcha_present(page):
+        return "captcha_blocked"
+
+    btn = page.query_selector("button[type='submit'], .template-btn-submit")
+    if btn:
+        btn.click()
+        page.wait_for_load_state("networkidle")
+        return "submitted"
+
+    return "submit_button_not_reached"
+
+
+# ── Shared helpers ─────────────────────────────────────────────────────────────
+
+def _split_name(full_name: str) -> tuple[str, str]:
+    parts = full_name.strip().split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], parts[0]   # ATS forms reject an empty last name
+    return parts[0], " ".join(parts[1:])
+
+
+def _upload_resume(page: Page, item: dict, selector: str = "input[type='file']") -> None:
+    resume = item.get("resume_path")
+    if not resume or not Path(resume).exists():
+        return
+    try:
+        inp = page.query_selector(selector)
+        if inp:
+            inp.set_input_files(resume)
+            _delay(1, 2)
+    except Exception:
+        pass
+
+
+def _captcha_present(page: Page) -> bool:
+    return bool(
+        page.query_selector(
+            "iframe[src*='captcha'], iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[title*='security']"
+        )
+    )
 
 
 def _fill_visible_text_inputs(page: Page, personal: dict) -> None:

@@ -11,10 +11,12 @@ interface JobDiscoveryProps {
   activeJobId: string | null
 }
 
-const PLATFORM_COLORS: Record<string, 'cyan' | 'amber' | 'red' | 'muted'> = {
-  LinkedIn: 'cyan',
-  Indeed:   'amber',
-  Naukri:   'red',
+const PLATFORM_COLORS: Record<string, 'cyan' | 'amber' | 'red' | 'emerald' | 'violet' | 'muted'> = {
+  LinkedIn:   'cyan',
+  Indeed:     'amber',
+  Naukri:     'red',
+  Greenhouse: 'emerald',
+  Lever:      'violet',
 }
 
 export default function JobDiscovery({ threadId, moduleState, onRunModule, activeJobId }: JobDiscoveryProps) {
