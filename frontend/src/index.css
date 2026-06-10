@@ -123,6 +123,21 @@
   background: linear-gradient(180deg, rgba(0,212,255,0.6) 0%, rgba(0,212,255,0.15) 40%, transparent 100%);
 }
 
+/* ── Radar logo sweep ────────────────────────────────────────── */
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.radar-sweep {
+  transform-origin: 18px 18px;
+  animation: radarSweep 3s linear infinite;
+}
+.radar-sweep-trail {
+  transform-origin: 18px 18px;
+  animation: radarSweep 3s linear infinite;
+  animation-delay: -0.18s;
+}
+
 /* ── Score ring ───────────────────────────────────────────────── */
 .score-ring-svg { transform: rotate(-90deg); }
 

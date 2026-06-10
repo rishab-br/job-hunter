@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare,
-  Plus, ChevronDown, LogOut, Zap,
+  Plus, ChevronDown, LogOut,
 } from 'lucide-react'
 import type { AuthState, Session, Screen } from '../types'
 
@@ -47,11 +47,24 @@ export default function Sidebar({
       {/* Logo */}
       <div className="px-5 py-5 relative">
         <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 animate-glow-cyan"
-            style={{ background: 'linear-gradient(135deg, #00D4FF, #0066ff)', boxShadow: '0 0 20px rgba(0,212,255,0.4)' }}
-          >
-            <Zap size={15} className="text-slate-900" fill="currentColor" />
+          {/* Radar scope — clean sweep, no cardinal tick marks */}
+          <div className="relative flex-shrink-0" style={{ width: 36, height: 36 }}>
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="18" cy="18" r="17" fill="rgba(0,212,255,0.04)" />
+              <circle cx="18" cy="18" r="15" stroke="rgba(0,212,255,0.22)" strokeWidth="0.75" />
+              <circle cx="18" cy="18" r="10" stroke="rgba(0,212,255,0.18)" strokeWidth="0.75" />
+              <circle cx="18" cy="18" r="5.5" stroke="rgba(0,212,255,0.3)"  strokeWidth="0.75" />
+              {/* Sweep trail */}
+              <line x1="18" y1="18" x2="18" y2="3.5" stroke="rgba(0,212,255,0.12)" strokeWidth="6"   strokeLinecap="round" className="radar-sweep-trail" />
+              {/* Sweep arm */}
+              <line x1="18" y1="18" x2="18" y2="3.5" stroke="#00D4FF"             strokeWidth="1.25" strokeLinecap="round" className="radar-sweep" />
+              {/* Centre dot */}
+              <circle cx="18" cy="18" r="1.75" fill="#00D4FF" style={{ filter: 'drop-shadow(0 0 3px #00D4FF)' }} />
+            </svg>
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.12) 0%, transparent 70%)' }}
+            />
           </div>
           <div>
             <div

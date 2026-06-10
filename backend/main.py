@@ -75,9 +75,6 @@ async def serve_dashboard():
     dist_index = FRONTEND_DIST / "index.html"
     if dist_index.exists():
         return HTMLResponse(dist_index.read_text(encoding="utf-8"))
-    legacy = FRONTEND / "jobhunter_dashboard.html"
-    if legacy.exists():
-        return HTMLResponse(legacy.read_text(encoding="utf-8"))
     return HTMLResponse(
         "<h1>Frontend not built.</h1><p>Run: <code>cd frontend && npm install && npm run build</code></p>",
         status_code=503,

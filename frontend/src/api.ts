@@ -60,6 +60,7 @@ export const api = {
       request<{ status: string; error?: string }>(`/api/jobs/${jobId}`),
   },
 
+
   // Output files (resumes, cover letters, screenshots)
   files: {
     url: (path: string) => `/api/files?path=${encodeURIComponent(path)}`,

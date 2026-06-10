@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Gemini
@@ -13,7 +15,10 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
 
     # Groq (fallback when Gemini is unavailable)
-    groq_api_key: str = ""
+    groq_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("GROQ_API_KEY_1", "GROQ_API_KEY"),
+    )
 
     # GitHub OAuth App (for multi-user frontend auth)
     github_client_id: str = ""

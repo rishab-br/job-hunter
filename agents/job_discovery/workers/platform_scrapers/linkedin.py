@@ -1,52 +1,83 @@
+"""
+LinkedIn job discovery — guest mode, zero login.
+
+Uses LinkedIn's public guest jobs API endpoint, which returns job card HTML
+without requiring any authentication, cookies, or session state.
+No account is touched, so there is no ban risk on your personal profile.
+"""
+import html as html_lib
+import re
 import time
 import random
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from playwright.sync_api import sync_playwright, Page, BrowserContext
+import httpx
 
-from config import settings
 from state import GlobalState
 
-MAX_JOBS   = 25
-LOGIN_URL  = "https://www.linkedin.com/login"
-SEARCH_URL = "https://www.linkedin.com/jobs/search/"
+MAX_JOBS  = 25
 
-_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+# LinkedIn's public guest search endpoint — works without cookies or a session.
+# This is the same endpoint LinkedIn's own public job-search page calls under the hood.
+_GUEST_API = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         "https://www.linkedin.com/jobs/search/",
+}
 
 
 def run(state: GlobalState) -> GlobalState:
     logs     = list(state.get("logs") or [])
     existing = list(state.get("discovered_jobs") or [])
 
-    if not settings.linkedin_email or not settings.linkedin_password:
-        logs.append("[linkedin] No credentials configured — skipping.")
-        return {**state, "logs": logs, "discovered_jobs": existing}
-
-    logs.append(f"[linkedin] Searching for '{state['target_role']}' in {state['target_market']}...")
+    role   = state.get("target_role", "")
+    market = state.get("target_market", "")
+    logs.append(f"[linkedin] Guest search: '{role}' in {market} (no login required)")
 
     jobs: list[dict] = []
+    start = 0
+
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                ],
-            )
-            context = browser.new_context(user_agent=_UA, viewport={"width": 1280, "height": 800})
-            _stealth(context)
-            page = context.new_page()
-            _login(page)
-            jobs = _search_jobs(page, state["target_role"], state["target_market"])
-            browser.close()
+        with httpx.Client(headers=_HEADERS, timeout=20, follow_redirects=True) as client:
+            while len(jobs) < MAX_JOBS:
+                resp = client.get(_GUEST_API, params={
+                    "keywords": role,
+                    "location": market,
+                    "start":    start,
+                    "count":    25,
+                    "f_TPR":    "r604800",   # last 7 days
+                    "sortBy":   "DD",
+                })
+                if resp.status_code != 200:
+                    logs.append(f"[linkedin] API returned HTTP {resp.status_code} at offset {start} — stopping.")
+                    break
+
+                batch = _parse_listings(resp.text)
+                if not batch:
+                    break   # no more results
+
+                seen_ids = {j["id"] for j in jobs}
+                for job in batch:
+                    if job["id"] not in seen_ids:
+                        jobs.append(job)
+                        seen_ids.add(job["id"])
+                        if len(jobs) >= MAX_JOBS:
+                            break
+
+                if len(jobs) >= MAX_JOBS:
+                    break
+
+                start += len(batch)
+                time.sleep(random.uniform(1.5, 3.0))   # polite pacing between pages
+
     except Exception as exc:
         logs.append(f"[linkedin] Error: {exc}")
 
@@ -54,125 +85,68 @@ def run(state: GlobalState) -> GlobalState:
     return {**state, "discovered_jobs": existing + jobs, "logs": logs}
 
 
-# ── Anti-detection ────────────────────────────────────────────────────────────
+# ── HTML parsing ──────────────────────────────────────────────────────────────
+# The guest API returns raw <li>…</li> fragments (no wrapping document).
 
-def _stealth(ctx: BrowserContext) -> None:
-    ctx.add_init_script("""
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] });
-        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-        window.chrome = { runtime: {} };
-    """)
-
-
-# ── Auth ──────────────────────────────────────────────────────────────────────
-
-def _login(page: Page) -> None:
-    page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
-    _delay(1, 2)
-    page.fill("#username", settings.linkedin_email)
-    _delay(0.5, 1.0)
-    page.fill("#password", settings.linkedin_password)
-    _delay(0.5, 1.0)
-    page.click("button[type='submit']")
-    try:
-        page.wait_for_url("**/feed**", timeout=15000)
-    except Exception:
-        pass
-    _delay(2, 3)
-
-
-# ── Search ────────────────────────────────────────────────────────────────────
-
-def _search_jobs(page: Page, role: str, market: str) -> list[dict]:
-    params = f"?keywords={role}&location={market}&f_TPR=r604800&sortBy=DD"
-    page.goto(SEARCH_URL + params, wait_until="domcontentloaded", timeout=30000)
-    _delay(2, 3)
-
-    jobs: list[dict] = []
-    seen: set[str]   = set()
-
-    for _ in range(6):
-        # Try multiple selector generations
-        cards = (
-            page.query_selector_all(".job-card-container") or
-            page.query_selector_all(".jobs-search-results__list-item") or
-            page.query_selector_all("[data-occludable-job-id]")
-        )
-
-        for card in cards:
-            try:
-                job = _extract_card(page, card)
-                if job and job["id"] not in seen:
-                    seen.add(job["id"])
-                    jobs.append(job)
-                    if len(jobs) >= MAX_JOBS:
-                        return jobs
-            except Exception:
-                continue
-
-        page.evaluate("window.scrollBy(0, 900)")
-        _delay(1.5, 2.5)
-
+def _parse_listings(html: str) -> list[dict]:
+    jobs = []
+    for card_html in re.findall(r"<li>(.*?)</li>", html, re.DOTALL):
+        job = _parse_card(card_html)
+        if job:
+            jobs.append(job)
     return jobs
 
 
-def _extract_card(page: Page, card) -> dict | None:
-    title_el = (
-        card.query_selector(".job-card-list__title--link") or
-        card.query_selector(".job-card-list__title") or
-        card.query_selector("a[data-control-name='job_card_title']")
+def _parse_card(card: str) -> Optional[dict]:
+    # Job URL — the primary key; skip the card if it's absent.
+    # LinkedIn returns regional subdomains (in., uk., ca., etc.) not always www.
+    url_m = re.search(
+        r'href="(https://[a-z]{2,}\.linkedin\.com/jobs/view/[^"]+)"',
+        card,
     )
-    company_el = (
-        card.query_selector(".job-card-container__company-name") or
-        card.query_selector(".artdeco-entity-lockup__subtitle span")
-    )
-    location_el = (
-        card.query_selector(".job-card-container__metadata-item") or
-        card.query_selector(".job-card-container__metadata-wrapper li")
-    )
-    link_el = (
-        card.query_selector("a.job-card-container__link") or
-        card.query_selector("a.job-card-list__title--link")
-    )
-
-    if not title_el or not company_el:
+    if not url_m:
         return None
+    # Strip tracking query params — keep only the clean canonical URL
+    url = url_m.group(1).split("?")[0].rstrip("/")
 
-    url = link_el.get_attribute("href") if link_el else ""
-    if url and not url.startswith("http"):
-        url = "https://www.linkedin.com" + url
+    # Stable job ID: numeric portion at the end of the slug
+    slug = url.split("/jobs/view/")[-1]           # e.g. "python-dev-at-acme-4397658289"
+    numeric_m = re.search(r"(\d{7,})$", slug)     # LinkedIn IDs are 7-10 digit numbers
+    job_id = f"li_{numeric_m.group(1)}" if numeric_m else f"li_{uuid.uuid4().hex[:8]}"
 
-    job_id = (
-        f"li_{url.split('/jobs/view/')[-1].split('/')[0]}"
-        if "/jobs/view/" in url
-        else f"li_{uuid.uuid4().hex[:8]}"
-    )
+    # Job title  ── h3.base-search-card__title
+    title = _text_between(card, r"base-search-card__title[^>]*>", r"</h3>")
+    if not title:
+        return None   # malformed card
 
-    description = ""
-    try:
-        card.click()
-        page.wait_for_selector(".jobs-description__content", timeout=5000)
-        desc_el = page.query_selector(".jobs-description__content")
-        description = desc_el.inner_text().strip() if desc_el else ""
-    except Exception:
-        pass
+    # Company name  ── h4.base-search-card__subtitle (may wrap an <a>)
+    company = _text_between(card, r"base-search-card__subtitle[^>]*>", r"</h4>")
 
-    salary_el = card.query_selector(".job-card-container__salary-info")
+    # Location  ── span.job-search-card__location
+    location = _text_between(card, r"job-search-card__location[^>]*>", r"</span>")
 
     return {
         "id":          job_id,
         "platform":    "LinkedIn",
-        "title":       title_el.inner_text().strip(),
-        "company":     company_el.inner_text().strip(),
-        "location":    location_el.inner_text().strip() if location_el else "",
+        "title":       title,
+        "company":     company or "",
+        "location":    location or "",
         "url":         url,
-        "description": description[:4000],
-        "salary_range": salary_el.inner_text().strip() if salary_el else None,
+        # Descriptions aren't available in the guest listing view.
+        # The job scorer uses title + company + role for relevance ranking.
+        "description": "",
+        "salary_range": None,
         "job_type":    None,
         "scraped_at":  datetime.now(timezone.utc).isoformat(),
     }
 
 
-def _delay(min_s: float = 1.0, max_s: float = 2.5) -> None:
-    time.sleep(random.uniform(min_s, max_s))
+def _text_between(html: str, opener_pattern: str, closer: str) -> str:
+    """Extract and clean text between a regex-matched opener tag and a literal closer."""
+    m = re.search(opener_pattern + r"(.*?)" + re.escape(closer), html, re.DOTALL)
+    if not m:
+        return ""
+    raw = m.group(1)
+    stripped = re.sub(r"<[^>]+>", " ", raw)        # remove nested tags
+    unescaped = html_lib.unescape(stripped)          # &amp; → &  etc.
+    return re.sub(r"\s+", " ", unescaped).strip()

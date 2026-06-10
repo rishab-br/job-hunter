@@ -365,6 +365,7 @@ export default function Dashboard({ summary, moduleStates, onRunModule, onRefres
             })}
           </div>
         </div>
+
       </div>
     </div>
   )
