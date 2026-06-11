@@ -11,3 +11,21 @@ services:
       - ./memory:/app/memory
       - ./user_data:/app/user_data
     restart: unless-stopped
+
+  # Opt-in autonomous mode: docker compose --profile autopilot up -d
+  autopilot:
+    build: .
+    profiles: ["autopilot"]
+    command: >
+      python main.py autopilot
+      --role "${TARGET_ROLE:-AI Engineer}"
+      --niche "${TARGET_NICHE:-}"
+      --market "${TARGET_MARKET:-India}"
+      --at "${AUTOPILOT_AT:-08:00}"
+    env_file:
+      - .env
+    volumes:
+      - ./outputs:/app/outputs
+      - ./memory:/app/memory
+      - ./user_data:/app/user_data
+    restart: unless-stopped

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     target_market: str = ""
     target_niche: str = ""
 
+    # Notifications (autopilot digests)
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     # App behaviour
     human_approval_required: bool = True
 

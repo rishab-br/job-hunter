@@ -277,7 +277,40 @@ python main.py respond --thread-id <uuid> --offer-id offer_abc12345 --response-f
 
 # Generate interview prep for a role
 python main.py prep --company "Acme AI" --role "ML Engineer" --jd-file jd.txt
+
+# One-shot autonomous discovery + digest (cron / Task Scheduler friendly)
+python main.py daily --role "AI Engineer" --niche "Agentic AI" --market "India"
+
+# Autopilot: discovery every morning at 08:00, digest to Telegram
+python main.py autopilot --role "AI Engineer" --niche "Agentic AI" --at 08:00
 ```
+
+---
+
+## 🌅 Autopilot — the agent that works while you sleep
+
+```
+every morning at 08:00
+        │
+        ▼
+Job Discovery subgraph (LinkedIn guest + Indeed + Naukri + Greenhouse + Lever)
+        │
+        ▼
+Dedupe against every job seen on previous runs   (memory/autopilot/seen_jobs.json)
+        │
+        ▼
+Markdown digest → outputs/digests/digest_<date>.md
+        │
+        ▼
+📱 Telegram: "25 scored · 7 new · 2 high priority" + top matches with links
+```
+
+- **Discovery only** — autopilot never applies to anything. The human approval gate is untouchable.
+- **Profile-aware** — reuses the freshest GitHub audit from your saved sessions, so relevance scores reflect *your* strengths without re-auditing every morning.
+- **Zero new dependencies** — scheduling is a transparent sleep-until loop; Telegram is one `httpx.post`.
+- **Three ways to run it:** `python main.py autopilot` (foreground loop), OS cron / Task Scheduler calling `python main.py daily`, or `docker compose --profile autopilot up -d`.
+
+Telegram setup (optional — digests always land in `outputs/digests/` regardless): create a bot with [@BotFather](https://t.me/BotFather), put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
 
 ---
 
@@ -296,6 +329,7 @@ All generated files land in `outputs/` (gitignored — contains personal data):
 | `interview_prep/<company>_cheat_sheet.md` | Full Q&amp;A cheat sheet |
 | `interview_prep/<company>_quick_card.md` | 5-minute pre-interview card |
 | `reports/pipeline_<date>.md` | Weekly application pipeline digest |
+| `digests/digest_<date>.md` | Autopilot daily discovery digest |
 
 ---
 
@@ -315,10 +349,10 @@ All generated files land in `outputs/` (gitignored — contains personal data):
 - [x] FastAPI backend + SSE real-time log streaming
 - [x] React dashboard — Mission Control with live agent log terminal
 - [x] GitHub OAuth + Supabase multi-user support
+- [x] Autopilot — daily autonomous discovery + dedupe + Telegram digest
 - [ ] Gmail trigger — auto-detect offer emails and kick off Offer Intelligence
 - [ ] pgvector semantic job search — embed JDs and find similar roles
 - [ ] Multi-user portfolio sharing — share your improvement plan publicly
-- [ ] Scheduled runs — weekly job discovery via cron
 
 ---
 

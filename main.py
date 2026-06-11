@@ -222,6 +222,49 @@ def cmd_prep(args: argparse.Namespace) -> None:
     console.print(f"\n[bold green]Thread ID:[/bold green] {thread_id}")
 
 
+def cmd_daily(args: argparse.Namespace) -> None:
+    """One-shot autonomous discovery run — designed for cron / Task Scheduler."""
+    from automation import run_daily_discovery
+
+    console.print(Panel(
+        f"[bold cyan]Autopilot — Daily Discovery[/bold cyan]\n"
+        f"Role: [yellow]{args.role}[/yellow] / {args.niche} in {args.market}",
+        title="JobHunter", border_style="cyan",
+    ))
+
+    with console.status("[cyan]Running autonomous discovery...[/cyan]", spinner="dots"):
+        summary = run_daily_discovery(
+            role=args.role, niche=args.niche,
+            market=args.market, github_username=args.username,
+        )
+
+    table = Table(title="Daily Run Summary", border_style="green", show_lines=True)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("Jobs Scored", str(summary["total_scored"]))
+    table.add_row("New Since Last Run", str(summary["new_jobs"]))
+    table.add_row("High Priority", str(summary["high_priority"]))
+    table.add_row("Digest", summary["digest_path"])
+    table.add_row("Telegram", "delivered ✅" if summary["telegram_delivered"] else "not configured")
+    console.print(table)
+
+
+def cmd_autopilot(args: argparse.Namespace) -> None:
+    """Long-running scheduler: daily discovery at a fixed local time."""
+    from automation import autopilot_loop
+
+    console.print(Panel(
+        f"[bold cyan]Autopilot Mode[/bold cyan]\n"
+        f"Role: [yellow]{args.role}[/yellow] / {args.niche} in {args.market}\n"
+        f"Daily run at: [green]{args.at}[/green]  (Ctrl+C to stop)",
+        title="JobHunter", border_style="cyan",
+    ))
+    autopilot_loop(
+        role=args.role, niche=args.niche,
+        market=args.market, github_username=args.username, at=args.at,
+    )
+
+
 def cmd_respond(args: argparse.Namespace) -> None:
     response_text = Path(args.response_file).read_text(encoding="utf-8") if args.response_file else args.response_text or ""
     if not response_text:
@@ -480,6 +523,21 @@ def main() -> None:
     p_prep.add_argument("--market", default="India")
     p_prep.add_argument("--niche", default="")
 
+    # daily (one-shot autonomous discovery)
+    p_daily = sub.add_parser("daily", help="One-shot autonomous discovery run + digest (cron-friendly)")
+    p_daily.add_argument("--role", required=True)
+    p_daily.add_argument("--niche", default="")
+    p_daily.add_argument("--market", default="India")
+    p_daily.add_argument("--username", default="")
+
+    # autopilot (long-running daily scheduler)
+    p_auto = sub.add_parser("autopilot", help="Run discovery every day at a fixed time, with Telegram digest")
+    p_auto.add_argument("--role", required=True)
+    p_auto.add_argument("--niche", default="")
+    p_auto.add_argument("--market", default="India")
+    p_auto.add_argument("--username", default="")
+    p_auto.add_argument("--at", default="08:00", help="Local time HH:MM for the daily run")
+
     # respond
     p_respond = sub.add_parser("respond", help="Get coaching on employer's counter-offer response")
     p_respond.add_argument("--thread-id", required=True, dest="thread_id")
@@ -497,6 +555,8 @@ def main() -> None:
         "resume":  cmd_resume,
         "respond": cmd_respond,
         "prep":    cmd_prep,
+        "daily":   cmd_daily,
+        "autopilot": cmd_autopilot,
     }
     dispatch[args.command](args)
 
