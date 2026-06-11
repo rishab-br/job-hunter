@@ -245,7 +245,12 @@ def cmd_daily(args: argparse.Namespace) -> None:
     table.add_row("New Since Last Run", str(summary["new_jobs"]))
     table.add_row("High Priority", str(summary["high_priority"]))
     table.add_row("Digest", summary["digest_path"])
-    table.add_row("Telegram", "delivered ✅" if summary["telegram_delivered"] else "not configured")
+    delivered = summary["delivered"]
+    if delivered:
+        for channel, ok in delivered.items():
+            table.add_row(channel.capitalize(), "delivered ✅" if ok else "send failed ❌")
+    else:
+        table.add_row("Delivery", "no channel configured (digest saved to disk)")
     console.print(table)
 
 

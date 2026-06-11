@@ -302,15 +302,16 @@ Dedupe against every job seen on previous runs   (memory/autopilot/seen_jobs.jso
 Markdown digest → outputs/digests/digest_<date>.md
         │
         ▼
-📱 Telegram: "25 scored · 7 new · 2 high priority" + top matches with links
+📧 Gmail: "JobHunter Daily — 7 new matches, 2 high priority" (HTML digest)
+   + optional 📱 Telegram compact summary
 ```
 
 - **Discovery only** — autopilot never applies to anything. The human approval gate is untouchable.
 - **Profile-aware** — reuses the freshest GitHub audit from your saved sessions, so relevance scores reflect *your* strengths without re-auditing every morning.
-- **Zero new dependencies** — scheduling is a transparent sleep-until loop; Telegram is one `httpx.post`.
+- **Zero new dependencies** — scheduling is a transparent sleep-until loop; email is stdlib `smtplib`; Telegram is one `httpx.post`.
 - **Three ways to run it:** `python main.py autopilot` (foreground loop), OS cron / Task Scheduler calling `python main.py daily`, or `docker compose --profile autopilot up -d`.
 
-Telegram setup (optional — digests always land in `outputs/digests/` regardless): create a bot with [@BotFather](https://t.me/BotFather), put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+**Gmail setup** (digests always land in `outputs/digests/` regardless): enable 2-Step Verification, create an [App Password](https://myaccount.google.com/apppasswords), then set `SMTP_USERNAME` + `SMTP_PASSWORD` in `.env`. The digest arrives as a styled HTML email with a plain-text fallback. Telegram stays available as an optional secondary channel (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`).
 
 ---
 

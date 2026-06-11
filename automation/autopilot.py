@@ -54,15 +54,20 @@ def run_daily_discovery(
     digest_md = build_digest(new_jobs, total_scored=len(scored), role=role, market=market)
     digest_path = _save_digest(digest_md)
 
-    delivered = notify.send_telegram(build_telegram_summary(new_jobs, len(scored), role))
+    high_count = sum(1 for j in new_jobs if j.get("priority") == "high")
+    delivered = notify.send_digest(
+        subject=build_email_subject(len(new_jobs), high_count),
+        markdown_body=digest_md,
+        compact_text=build_compact_summary(new_jobs, len(scored), role),
+    )
 
     return {
         "ran_at": datetime.now(timezone.utc).isoformat(),
         "total_scored": len(scored),
         "new_jobs": len(new_jobs),
-        "high_priority": sum(1 for j in new_jobs if j.get("priority") == "high"),
+        "high_priority": high_count,
         "digest_path": str(digest_path),
-        "telegram_delivered": delivered,
+        "delivered": delivered,
     }
 
 
@@ -81,7 +86,7 @@ def autopilot_loop(role: str, niche: str, market: str, github_username: str, at:
             print(f"[autopilot] Run complete: {summary}")
         except Exception as exc:
             print(f"[autopilot] Run failed: {exc}")
-            notify.send_telegram(f"⚠️ JobHunter autopilot run failed: {exc}")
+            notify.send_alert(f"JobHunter autopilot run failed: {exc}")
         time.sleep(61)   # step past the fire minute before recomputing
 
 
@@ -166,7 +171,15 @@ def build_digest(new_jobs: list[dict], total_scored: int, role: str, market: str
     return "\n".join(lines)
 
 
-def build_telegram_summary(new_jobs: list[dict], total_scored: int, role: str) -> str:
+def build_email_subject(new_count: int, high_count: int) -> str:
+    today = datetime.now().strftime("%d %b")
+    if new_count == 0:
+        return f"JobHunter Daily — nothing new ({today})"
+    high = f", {high_count} high priority" if high_count else ""
+    return f"JobHunter Daily — {new_count} new match{'es' if new_count != 1 else ''}{high} ({today})"
+
+
+def build_compact_summary(new_jobs: list[dict], total_scored: int, role: str) -> str:
     """Compact plain-text version for the phone notification."""
     high = [j for j in new_jobs if j.get("priority") == "high"]
     head = (

@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     target_niche: str = ""
 
     # Notifications (autopilot digests)
+    # Email — primary channel. For Gmail: smtp.gmail.com + an App Password
+    # (Google Account → Security → 2-Step Verification → App passwords).
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    digest_email_to: str = ""   # defaults to smtp_username when empty
+
+    # Telegram — optional secondary channel
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
