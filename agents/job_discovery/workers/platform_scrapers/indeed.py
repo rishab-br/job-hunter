@@ -26,11 +26,13 @@ def run(state: GlobalState) -> GlobalState:
     logs     = list(state.get("logs") or [])
     existing = list(state.get("discovered_jobs") or [])
 
-    role   = state["target_role"]
-    market = state["target_market"]
-    logs.append(f"[indeed] Searching for '{role}' in {market}...")
+    market       = state["target_market"]
+    # Cap Playwright searches at 3 roles to avoid long runtimes; primary role first
+    search_roles = (state.get("search_roles") or [state["target_role"]])[:3]
+    logs.append(f"[indeed] Searching {len(search_roles)} title(s) in {market}: {search_roles}")
 
     jobs: list[dict] = []
+    seen_ids: set[str] = set()
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -55,7 +57,12 @@ def run(state: GlobalState) -> GlobalState:
             if settings.indeed_email and settings.indeed_password:
                 _login(page, market)
 
-            jobs = _search_jobs(page, role, market)
+            for role in search_roles:
+                for job in _search_jobs(page, role, market):
+                    if job["id"] not in seen_ids:
+                        jobs.append(job)
+                        seen_ids.add(job["id"])
+
             browser.close()
     except Exception as exc:
         logs.append(f"[indeed] Error: {exc}")

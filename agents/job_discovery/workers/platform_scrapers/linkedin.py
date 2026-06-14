@@ -38,50 +38,51 @@ def run(state: GlobalState) -> GlobalState:
     logs     = list(state.get("logs") or [])
     existing = list(state.get("discovered_jobs") or [])
 
-    role   = state.get("target_role", "")
-    market = state.get("target_market", "")
-    logs.append(f"[linkedin] Guest search: '{role}' in {market} (no login required)")
+    market       = state.get("target_market", "")
+    search_roles = state.get("search_roles") or [state.get("target_role", "")]
+    logs.append(f"[linkedin] Guest search across {len(search_roles)} title(s) in {market}: {search_roles}")
 
     jobs: list[dict] = []
-    start = 0
+    seen_ids: set[str] = set()
+    per_role_limit = max(MAX_JOBS // len(search_roles), 10)
 
-    try:
-        with httpx.Client(headers=_HEADERS, timeout=20, follow_redirects=True) as client:
-            while len(jobs) < MAX_JOBS:
-                resp = client.get(_GUEST_API, params={
-                    "keywords": role,
-                    "location": market,
-                    "start":    start,
-                    "count":    25,
-                    "f_TPR":    "r604800",   # last 7 days
-                    "sortBy":   "DD",
-                })
-                if resp.status_code != 200:
-                    logs.append(f"[linkedin] API returned HTTP {resp.status_code} at offset {start} — stopping.")
-                    break
+    for role in search_roles:
+        start = 0
+        role_count = 0
+        try:
+            with httpx.Client(headers=_HEADERS, timeout=20, follow_redirects=True) as client:
+                while role_count < per_role_limit:
+                    resp = client.get(_GUEST_API, params={
+                        "keywords": role,
+                        "location": market,
+                        "start":    start,
+                        "count":    25,
+                        "f_TPR":    "r604800",   # last 7 days
+                        "sortBy":   "DD",
+                    })
+                    if resp.status_code != 200:
+                        logs.append(f"[linkedin] HTTP {resp.status_code} for '{role}' at offset {start} — skipping.")
+                        break
 
-                batch = _parse_listings(resp.text)
-                if not batch:
-                    break   # no more results
+                    batch = _parse_listings(resp.text)
+                    if not batch:
+                        break
 
-                seen_ids = {j["id"] for j in jobs}
-                for job in batch:
-                    if job["id"] not in seen_ids:
-                        jobs.append(job)
-                        seen_ids.add(job["id"])
-                        if len(jobs) >= MAX_JOBS:
-                            break
+                    for job in batch:
+                        if job["id"] not in seen_ids:
+                            jobs.append(job)
+                            seen_ids.add(job["id"])
+                            role_count += 1
+                            if role_count >= per_role_limit:
+                                break
 
-                if len(jobs) >= MAX_JOBS:
-                    break
+                    start += len(batch)
+                    time.sleep(random.uniform(1.5, 3.0))
 
-                start += len(batch)
-                time.sleep(random.uniform(1.5, 3.0))   # polite pacing between pages
+        except Exception as exc:
+            logs.append(f"[linkedin] Error for '{role}': {exc}")
 
-    except Exception as exc:
-        logs.append(f"[linkedin] Error: {exc}")
-
-    logs.append(f"[linkedin] Collected {len(jobs)} listings.")
+    logs.append(f"[linkedin] Collected {len(jobs)} listings across {len(search_roles)} role(s).")
     return {**state, "discovered_jobs": existing + jobs, "logs": logs}
 
 

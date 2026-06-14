@@ -63,15 +63,16 @@ def run(state: GlobalState) -> GlobalState:
     logs     = list(state.get("logs") or [])
     existing = list(state.get("discovered_jobs") or [])
 
-    role   = state.get("target_role", "")
-    market = state.get("target_market", "")
-    logs.append(f"[ats_boards] Greenhouse + Lever discovery for '{role}' (public JSON APIs)")
+    market       = state.get("target_market", "")
+    search_roles = state.get("search_roles") or [state.get("target_role", "")]
+    primary_role = search_roles[0]
+    logs.append(f"[ats_boards] Greenhouse + Lever discovery across {len(search_roles)} title(s): {search_roles}")
 
-    # 1. Collect board tokens: seeds + DDG-discovered
+    # 1. Collect board tokens: seeds + DDG-discovered (search with primary role only to avoid DDG rate limits)
     gh_tokens = list(SEED_BOARDS["greenhouse"])
     lv_tokens = list(SEED_BOARDS["lever"])
     try:
-        found_gh, found_lv = _discover_boards(role)
+        found_gh, found_lv = _discover_boards(primary_role)
         gh_tokens += [t for t in found_gh if t not in gh_tokens]
         lv_tokens += [t for t in found_lv if t not in lv_tokens]
         logs.append(
@@ -96,8 +97,8 @@ def run(state: GlobalState) -> GlobalState:
             except Exception as exc:
                 logs.append(f"[ats_boards] {platform}/{token}: {exc}")
 
-    # 3. Filter to the target role, then (leniently) to the target market
-    role_matched = [j for j in jobs if _title_matches(j["title"], role)]
+    # 3. Filter: job must match ANY of the expanded search roles
+    role_matched = [j for j in jobs if any(_title_matches(j["title"], r) for r in search_roles)]
     final = _filter_by_market(role_matched, market)
 
     # 4. Per-platform cap, newest first
@@ -107,7 +108,7 @@ def run(state: GlobalState) -> GlobalState:
 
     logs.append(
         f"[ats_boards] {len(jobs)} postings fetched → {len(role_matched)} role matches "
-        f"→ {len(final)} after market filter/cap."
+        f"({len(search_roles)} titles) → {len(final)} after market filter/cap."
     )
     return {**state, "discovered_jobs": existing + final, "logs": logs}
 

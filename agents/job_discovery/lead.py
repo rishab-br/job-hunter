@@ -5,6 +5,7 @@ from .workers.platform_scrapers.linkedin import run as scrape_linkedin
 from .workers.platform_scrapers.indeed import run as scrape_indeed
 from .workers.platform_scrapers.naukri import run as scrape_naukri
 from .workers.platform_scrapers.ats_boards import run as scrape_ats_boards
+from .workers.role_expander import run as expand_roles
 from .workers.job_enricher import run as enrich_jobs
 from .workers.jd_analyzer import run as analyze_jds
 from .workers.job_filter import run as filter_jobs
@@ -14,6 +15,7 @@ from .workers.relevance_scorer import run as score_relevance
 def build_subgraph() -> StateGraph:
     graph = StateGraph(GlobalState)
 
+    graph.add_node("role_expander", expand_roles)           # LLM synonym expansion
     graph.add_node("scrape_linkedin", scrape_linkedin)
     graph.add_node("scrape_indeed", scrape_indeed)
     graph.add_node("scrape_naukri", scrape_naukri)
@@ -24,7 +26,8 @@ def build_subgraph() -> StateGraph:
     graph.add_node("relevance_scorer", score_relevance)
     graph.add_node("finalise", _finalise)
 
-    graph.set_entry_point("scrape_linkedin")
+    graph.set_entry_point("role_expander")
+    graph.add_edge("role_expander", "scrape_linkedin")
     graph.add_edge("scrape_linkedin", "scrape_indeed")
     graph.add_edge("scrape_indeed", "scrape_naukri")
     graph.add_edge("scrape_naukri", "scrape_ats_boards")

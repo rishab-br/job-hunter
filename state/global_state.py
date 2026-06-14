@@ -37,6 +37,10 @@ class GlobalState(TypedDict):
     improvement_plan: Optional[list[dict[str, Any]]]
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
+    # LLM-expanded search titles — e.g. ["AI Engineer", "AI Developer", "GenAI Engineer"]
+    # Populated by role_expander; scrapers iterate over all of them.
+    search_roles: Optional[list[str]]
+
     # discovery_filters keys:
     #   max_seniority: "fresher"|"junior"|"mid"|"senior"|"lead"  (default "lead" = no cap)
     #   locations: list[str]   e.g. ["Bangalore", "Hyderabad", "Remote"]  ([] = no filter)
@@ -91,6 +95,7 @@ def initial_state(
         trend_data=None,
         gap_analysis=None,
         improvement_plan=None,
+        search_roles=None,
         discovery_filters=None,
         discovered_jobs=None,
         analyzed_jds=None,
