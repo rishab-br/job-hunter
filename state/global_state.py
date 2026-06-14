@@ -37,6 +37,12 @@ class GlobalState(TypedDict):
     improvement_plan: Optional[list[dict[str, Any]]]
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
+    # discovery_filters keys:
+    #   max_seniority: "fresher"|"junior"|"mid"|"senior"|"lead"  (default "lead" = no cap)
+    #   locations: list[str]   e.g. ["Bangalore", "Hyderabad", "Remote"]  ([] = no filter)
+    #   remote_ok: bool        include remote jobs regardless of location filter
+    #   min_score: int         drop scored jobs below this threshold (0-100, default 0)
+    discovery_filters: Optional[dict[str, Any]]
     discovered_jobs: Optional[list[dict[str, Any]]]
     analyzed_jds: Optional[list[dict[str, Any]]]
     scored_jobs: Optional[list[dict[str, Any]]]
@@ -85,6 +91,7 @@ def initial_state(
         trend_data=None,
         gap_analysis=None,
         improvement_plan=None,
+        discovery_filters=None,
         discovered_jobs=None,
         analyzed_jds=None,
         scored_jobs=None,

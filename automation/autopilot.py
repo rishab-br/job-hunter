@@ -20,7 +20,7 @@ DIGEST_DIR = Path("outputs/digests")
 SESSION_DIR = Path("memory/sessions")
 
 SEEN_RETENTION_DAYS = 60   # forget jobs not re-seen in this window
-DIGEST_TOP_N = 10          # jobs listed in full in the digest
+DIGEST_TOP_N = 200         # effectively unlimited for email; Telegram summary has its own cap
 
 
 # ── Entry points ───────────────────────────────────────────────────────────────
@@ -30,6 +30,7 @@ def run_daily_discovery(
     niche: str = "",
     market: str = "India",
     github_username: str = "",
+    filters: dict | None = None,
 ) -> dict:
     """One-shot autonomous discovery run. Returns a summary dict."""
     from agents.job_discovery import build_subgraph  # deferred: heavy import
@@ -41,6 +42,8 @@ def run_daily_discovery(
         target_niche=niche,
     )
     state["current_phase"] = SystemPhase.JOB_DISCOVERY
+    if filters:
+        state["discovery_filters"] = filters
     _inject_profile_context(state)
 
     graph = build_subgraph().compile()
@@ -71,7 +74,7 @@ def run_daily_discovery(
     }
 
 
-def autopilot_loop(role: str, niche: str, market: str, github_username: str, at: str = "08:00") -> None:
+def autopilot_loop(role: str, niche: str, market: str, github_username: str, at: str = "08:00", filters: dict | None = None) -> None:
     """Blocking loop: run discovery every day at HH:MM local time.
 
     Deliberately dependency-free — survives clock drift and long runs by
@@ -82,7 +85,7 @@ def autopilot_loop(role: str, niche: str, market: str, github_username: str, at:
         print(f"[autopilot] Next run at {at} ({wait_s / 3600:.1f}h from now). Sleeping.")
         time.sleep(wait_s)
         try:
-            summary = run_daily_discovery(role, niche, market, github_username)
+            summary = run_daily_discovery(role, niche, market, github_username, filters=filters)
             print(f"[autopilot] Run complete: {summary}")
         except Exception as exc:
             print(f"[autopilot] Run failed: {exc}")
@@ -166,7 +169,7 @@ def build_digest(new_jobs: list[dict], total_scored: int, role: str, market: str
         lines.append("")
 
     if len(new_jobs) > DIGEST_TOP_N:
-        lines.append(f"…and {len(new_jobs) - DIGEST_TOP_N} more in the session output.")
+        lines.append(f"…and {len(new_jobs) - DIGEST_TOP_N} more — check outputs/digests/ for the full list.")
 
     return "\n".join(lines)
 

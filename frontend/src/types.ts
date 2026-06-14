@@ -62,6 +62,22 @@ export interface GitHubIntelData {
   improvement_plan?: ImprovementItem[]
 }
 
+export type SeniorityLevel = 'fresher' | 'junior' | 'mid' | 'senior' | 'lead'
+
+export interface DiscoveryFilters {
+  max_seniority: SeniorityLevel   // highest seniority level to show (inclusive)
+  locations: string[]             // preferred cities; empty = no location filter
+  remote_ok: boolean              // include remote jobs regardless of location filter
+  min_score: number               // drop jobs scored below this (0 = no cut)
+}
+
+export const DEFAULT_FILTERS: DiscoveryFilters = {
+  max_seniority: 'lead',
+  locations: [],
+  remote_ok: true,
+  min_score: 0,
+}
+
 export interface Job {
   job_id: string
   company: string

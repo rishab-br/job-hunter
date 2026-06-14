@@ -59,6 +59,14 @@ def run(state: GlobalState) -> GlobalState:
     # Sort by relevance_score descending
     scored.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
+    # Apply min_score cut — after sorting so the log numbers are accurate
+    filters = state.get("discovery_filters") or {}
+    min_score = int(filters.get("min_score") or 0)
+    if min_score:
+        before_cut = len(scored)
+        scored = [s for s in scored if s.get("relevance_score", 0) >= min_score]
+        logs.append(f"[relevance_scorer] min_score={min_score}: {before_cut - len(scored)} job(s) cut.")
+
     high_priority = sum(1 for s in scored if s.get("priority") == "high")
     logs.append(
         f"[relevance_scorer] Done. {high_priority} high-priority matches out of {len(scored)} total."

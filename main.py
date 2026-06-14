@@ -222,13 +222,30 @@ def cmd_prep(args: argparse.Namespace) -> None:
     console.print(f"\n[bold green]Thread ID:[/bold green] {thread_id}")
 
 
+def _parse_filters(args: argparse.Namespace) -> dict:
+    filters: dict = {}
+    if getattr(args, "max_seniority", None):
+        filters["max_seniority"] = args.max_seniority
+    if getattr(args, "locations", None):
+        filters["locations"] = [l.strip() for l in args.locations.split(",") if l.strip()]
+    if getattr(args, "no_remote", False):
+        filters["remote_ok"] = False
+    else:
+        filters["remote_ok"] = True
+    if getattr(args, "min_score", None):
+        filters["min_score"] = int(args.min_score)
+    return filters
+
+
 def cmd_daily(args: argparse.Namespace) -> None:
     """One-shot autonomous discovery run — designed for cron / Task Scheduler."""
     from automation import run_daily_discovery
 
+    filters = _parse_filters(args)
     console.print(Panel(
         f"[bold cyan]Autopilot — Daily Discovery[/bold cyan]\n"
-        f"Role: [yellow]{args.role}[/yellow] / {args.niche} in {args.market}",
+        f"Role: [yellow]{args.role}[/yellow] / {args.niche} in {args.market}\n"
+        + (f"Filters: {filters}" if filters else "Filters: none"),
         title="JobHunter", border_style="cyan",
     ))
 
@@ -236,6 +253,7 @@ def cmd_daily(args: argparse.Namespace) -> None:
         summary = run_daily_discovery(
             role=args.role, niche=args.niche,
             market=args.market, github_username=args.username,
+            filters=filters or None,
         )
 
     table = Table(title="Daily Run Summary", border_style="green", show_lines=True)
@@ -258,15 +276,18 @@ def cmd_autopilot(args: argparse.Namespace) -> None:
     """Long-running scheduler: daily discovery at a fixed local time."""
     from automation import autopilot_loop
 
+    filters = _parse_filters(args)
     console.print(Panel(
         f"[bold cyan]Autopilot Mode[/bold cyan]\n"
         f"Role: [yellow]{args.role}[/yellow] / {args.niche} in {args.market}\n"
-        f"Daily run at: [green]{args.at}[/green]  (Ctrl+C to stop)",
+        f"Daily run at: [green]{args.at}[/green]  (Ctrl+C to stop)\n"
+        + (f"Filters: {filters}" if filters else "Filters: none"),
         title="JobHunter", border_style="cyan",
     ))
     autopilot_loop(
         role=args.role, niche=args.niche,
         market=args.market, github_username=args.username, at=args.at,
+        filters=filters or None,
     )
 
 
@@ -528,20 +549,42 @@ def main() -> None:
     p_prep.add_argument("--market", default="India")
     p_prep.add_argument("--niche", default="")
 
+    # shared filter args — attached to both daily + autopilot
+    def _add_filter_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--max-seniority", dest="max_seniority", default=None,
+            choices=["fresher", "junior", "mid", "senior", "lead"],
+            help="Drop jobs above this seniority level (e.g. 'junior' hides senior/lead roles)",
+        )
+        p.add_argument(
+            "--locations", default=None,
+            help="Comma-separated preferred cities, e.g. 'Bangalore,Hyderabad,Remote'",
+        )
+        p.add_argument(
+            "--no-remote", dest="no_remote", action="store_true",
+            help="Exclude remote jobs (remote included by default when --locations is set)",
+        )
+        p.add_argument(
+            "--min-score", dest="min_score", type=int, default=None,
+            help="Drop jobs whose relevance score is below this threshold (0-100)",
+        )
+
     # daily (one-shot autonomous discovery)
     p_daily = sub.add_parser("daily", help="One-shot autonomous discovery run + digest (cron-friendly)")
     p_daily.add_argument("--role", required=True)
     p_daily.add_argument("--niche", default="")
     p_daily.add_argument("--market", default="India")
     p_daily.add_argument("--username", default="")
+    _add_filter_args(p_daily)
 
     # autopilot (long-running daily scheduler)
-    p_auto = sub.add_parser("autopilot", help="Run discovery every day at a fixed time, with Telegram digest")
+    p_auto = sub.add_parser("autopilot", help="Run discovery every day at a fixed time, with Gmail digest")
     p_auto.add_argument("--role", required=True)
     p_auto.add_argument("--niche", default="")
     p_auto.add_argument("--market", default="India")
     p_auto.add_argument("--username", default="")
     p_auto.add_argument("--at", default="08:00", help="Local time HH:MM for the daily run")
+    _add_filter_args(p_auto)
 
     # respond
     p_respond = sub.add_parser("respond", help="Get coaching on employer's counter-offer response")
