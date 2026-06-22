@@ -80,8 +80,8 @@ const PIPE_STEPS = [
   { key: 'job_discovery',    label: 'Job\nDiscovery',   icon: <Search size={18} />,         color: '#00D4FF' },
   { key: 'applying',         label: 'App\nEngine',      icon: <FileText size={18} />,       color: '#10B981' },
   { key: 'tracking',         label: 'Status\nTracker',  icon: <Activity size={18} />,       color: '#F59E0B' },
-  { key: 'offer_evaluation', label: 'Offer\nIntel',     icon: <DollarSign size={18} />,     color: '#FBBF24' },
   { key: 'interview_prep',   label: 'Interview\nPrep',  icon: <MessageSquare size={18} />,  color: '#EC4899' },
+  { key: 'offer_evaluation', label: 'Offer\nIntel',     icon: <DollarSign size={18} />,     color: '#FBBF24' },
 ]
 
 function Pipeline({ currentPhase, summary }: { currentPhase: string; summary: DashboardSummary | null }) {
@@ -180,8 +180,8 @@ const MODULE_DEFS = [
   { key: 'discovery',    name: 'Job Discovery',        icon: Search,         metricKey: 'jobs_found',      metricLabel: 'jobs found',         color: '#00D4FF', screen: 'discovery'    },
   { key: 'application',  name: 'Application Engine',  icon: FileText,       metricKey: 'apps_submitted',  metricLabel: 'submitted',          color: '#10B981', screen: 'applications' },
   { key: 'status',       name: 'Status Tracker',       icon: Activity,       metricKey: 'ghosted',         metricLabel: 'ghosted',            color: '#F59E0B', screen: 'applications' },
-  { key: 'offer',        name: 'Offer Intelligence',   icon: DollarSign,     metricKey: 'offers_received', metricLabel: 'offers evaluated',   color: '#FBBF24', screen: 'offers'       },
   { key: 'prep',         name: 'Interview Prep',       icon: MessageSquare,  metricKey: 'prep_sessions',   metricLabel: 'sessions ready',     color: '#EC4899', screen: 'interview'    },
+  { key: 'offer',        name: 'Offer Intelligence',   icon: DollarSign,     metricKey: 'offers_received', metricLabel: 'offers evaluated',   color: '#FBBF24', screen: 'offers'       },
 ]
 
 interface ModuleCardProps {

@@ -11,8 +11,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'github',       label: 'GitHub Intel',   icon: <Github size={15} />,          accent: '#8B5CF6' },
   { id: 'discovery',    label: 'Job Discovery',  icon: <Search size={15} />,           accent: '#00D4FF' },
   { id: 'applications', label: 'Applications',   icon: <FileText size={15} />,         accent: '#10B981' },
-  { id: 'offers',       label: 'Offer Intel',    icon: <DollarSign size={15} />,       accent: '#F59E0B' },
   { id: 'interview',    label: 'Interview Prep', icon: <MessageSquare size={15} />,    accent: '#EC4899' },
+  { id: 'offers',       label: 'Offer Intel',    icon: <DollarSign size={15} />,       accent: '#F59E0B' },
   { id: 'autopilot',   label: 'Autopilot',       icon: <Bot size={15} />,              accent: '#A78BFA' },
 ]
 
