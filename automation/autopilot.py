@@ -211,6 +211,48 @@ def _save_digest(markdown: str) -> Path:
 
 # ── Profile context ────────────────────────────────────────────────────────────
 
+def postprocess_run(
+    scored: list[dict],
+    role: str,
+    market: str,
+    push_fn=None,
+) -> dict:
+    """Dedupe → digest → email. Callable from the runner after discovery streaming.
+
+    push_fn: optional callable(str) that routes status lines to SSE.
+    Returns the last_run summary dict.
+    """
+    seen = _load_seen()
+    new_jobs, seen = _split_new_jobs(scored, seen)
+    _save_seen(seen)
+
+    high_count = sum(1 for j in new_jobs if j.get("priority") == "high")
+    if push_fn:
+        push_fn(f"[autopilot] {len(new_jobs)} new jobs ({high_count} high priority) — building digest…")
+
+    digest_md = build_digest(new_jobs, total_scored=len(scored), role=role, market=market)
+    digest_path = _save_digest(digest_md)
+
+    delivered = notify.send_digest(
+        subject=build_email_subject(len(new_jobs), high_count),
+        markdown_body=digest_md,
+        compact_text=build_compact_summary(new_jobs, len(scored), role),
+    )
+    if push_fn:
+        ok = delivered.get("email", False)
+        push_fn(f"[autopilot] Digest {'delivered ✓' if ok else 'email failed ✗'} — "
+                f"{len(new_jobs)} new, {high_count} high priority")
+
+    return {
+        "ran_at":       datetime.now(timezone.utc).isoformat(),
+        "total_scored": len(scored),
+        "new_jobs":     len(new_jobs),
+        "high_priority": high_count,
+        "digest_path":  str(digest_path),
+        "delivered":    delivered,
+    }
+
+
 def _inject_profile_context(state: GlobalState) -> None:
     """Reuse the freshest GitHub audit from any saved session so relevance
     scoring stays profile-aware without re-running the audit every morning."""

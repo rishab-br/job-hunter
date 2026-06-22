@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare,
+  LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare, Bot,
   Plus, ChevronDown, LogOut,
 } from 'lucide-react'
 import type { AuthState, Session, Screen } from '../types'
@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'applications', label: 'Applications',   icon: <FileText size={15} />,         accent: '#10B981' },
   { id: 'offers',       label: 'Offer Intel',    icon: <DollarSign size={15} />,       accent: '#F59E0B' },
   { id: 'interview',    label: 'Interview Prep', icon: <MessageSquare size={15} />,    accent: '#EC4899' },
+  { id: 'autopilot',   label: 'Autopilot',       icon: <Bot size={15} />,              accent: '#A78BFA' },
 ]
 
 interface SidebarProps {

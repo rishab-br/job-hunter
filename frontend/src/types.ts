@@ -166,5 +166,38 @@ export interface PendingApproval {
   remaining?: number
 }
 
-export type Screen = 'dashboard' | 'github' | 'discovery' | 'applications' | 'offers' | 'interview'
+export type Screen = 'dashboard' | 'github' | 'discovery' | 'applications' | 'offers' | 'interview' | 'autopilot'
 export type ModalType = null | 'new-session' | 'offer' | 'prep'
+
+// ── Autopilot ─────────────────────────────────────────────────────────────────
+
+export interface AutopilotConfig {
+  enabled: boolean
+  at: string
+  role: string
+  niche: string
+  market: string
+  github_username: string
+  filters: {
+    max_seniority: SeniorityLevel
+    locations: string[]
+    remote_ok: boolean
+    min_score: number
+  }
+}
+
+export interface AutopilotLastRun {
+  ran_at?: string
+  total_scored?: number
+  new_jobs?: number
+  high_priority?: number
+  digest_path?: string
+  delivered?: { email?: boolean; telegram?: boolean }
+  error?: string
+}
+
+export interface AutopilotStatus {
+  config: AutopilotConfig
+  last_run: AutopilotLastRun | null
+  next_run: string | null
+}

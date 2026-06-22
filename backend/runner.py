@@ -218,6 +218,7 @@ def _worker(
 ) -> None:
     try:
         _jobs[job_id]["status"] = "running"
+        is_autopilot = False
 
         from state import SystemPhase
         from orchestrator import inject_interview_target
@@ -259,6 +260,14 @@ def _worker(
             state = {**state, "current_phase": SystemPhase.APPLYING}
             graph = compile_graph()
             uses_checkpointer = True
+
+        elif module == "autopilot":
+            # Full autopilot run: discovery subgraph + post-processing (dedupe, digest, email)
+            import importlib
+            pkg = importlib.import_module("agents.job_discovery")
+            state = {**state, "current_phase": SystemPhase.JOB_DISCOVERY}
+            graph = pkg.build_subgraph().compile()
+            is_autopilot = True
 
         elif module in _STANDALONE_SUBGRAPHS:
             # Run the subgraph directly — avoids cascading to next pipeline phase
@@ -303,6 +312,21 @@ def _worker(
                 _jobs[job_id]["status"] = "awaiting_approval"
                 return
             final_state = dict(snap.values or final_state)
+
+        # ── Autopilot post-processing (dedupe → digest → email) ───────────────
+        if is_autopilot:
+            try:
+                from automation.autopilot import postprocess_run
+                from backend.autopilot_scheduler import save_last_run
+                result = postprocess_run(
+                    scored=final_state.get("scored_jobs") or [],
+                    role=state.get("_autopilot_role") or final_state.get("target_role", ""),
+                    market=state.get("_autopilot_market") or final_state.get("target_market", ""),
+                    push_fn=lambda msg: _push(thread_id, msg),
+                )
+                save_last_run(result)
+            except Exception as pp_exc:
+                _push(thread_id, f"[autopilot] Post-processing error: {pp_exc}")
 
         save_session(thread_id, final_state, user_id=user_id)
         _push(thread_id, f"__DONE__{job_id}")

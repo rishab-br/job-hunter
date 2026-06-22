@@ -1,4 +1,4 @@
-import type { DashboardSummary, GitHubIntelData, Job, Application, OfferEvaluation, PrepSession, Session, PendingApproval } from './types'
+import type { DashboardSummary, GitHubIntelData, Job, Application, OfferEvaluation, PrepSession, Session, PendingApproval, AutopilotConfig, AutopilotStatus } from './types'
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options)
@@ -60,6 +60,19 @@ export const api = {
       request<{ status: string; error?: string }>(`/api/jobs/${jobId}`),
   },
 
+
+  autopilot: {
+    status: () =>
+      request<AutopilotStatus>('/api/autopilot/status'),
+    updateConfig: (cfg: AutopilotConfig) =>
+      request<{ status: string; config: AutopilotConfig }>('/api/autopilot/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      }),
+    runNow: () =>
+      request<{ job_id: string; thread_id: string }>('/api/autopilot/run', { method: 'POST' }),
+  },
 
   // Output files (resumes, cover letters, screenshots)
   files: {

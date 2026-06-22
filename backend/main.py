@@ -18,19 +18,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend import runner
-from backend.routes import sessions, modules, data, stream, auth
+from backend import runner, autopilot_scheduler
+from backend.routes import sessions, modules, data, stream, auth, autopilot as autopilot_routes
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Give the runner a reference to the running event loop so background
-    # threads can safely push to asyncio queues.
     runner.register_loop(asyncio.get_event_loop())
+    autopilot_scheduler.start_scheduler()
     yield
-    # Graceful shutdown — nothing to clean up explicitly (executor daemon threads)
+    autopilot_scheduler.stop_scheduler()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -57,6 +56,7 @@ app.include_router(sessions.router)
 app.include_router(modules.router)
 app.include_router(data.router)
 app.include_router(stream.router)
+app.include_router(autopilot_routes.router)
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
