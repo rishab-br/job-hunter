@@ -1,4 +1,4 @@
-import { RefreshCw, Search, Github, FileText, DollarSign, MessageSquare, Activity, Play, Square, TrendingUp, Briefcase, Star } from 'lucide-react'
+import { RefreshCw, Search, Github, FileText, DollarSign, MessageSquare, Activity, Play, Square, TrendingUp, Briefcase, Star, ClipboardCheck } from 'lucide-react'
 import type { DashboardSummary, ModuleState } from '../types'
 
 interface DashboardProps {
@@ -77,6 +77,7 @@ function StatCard({ label, value, icon, accent, sub }: StatCardProps) {
 
 const PIPE_STEPS = [
   { key: 'github_analysis',  label: 'GitHub\nIntel',    icon: <Github size={18} />,        color: '#8B5CF6' },
+  { key: 'resume_review',    label: 'Resume\nReview',   icon: <ClipboardCheck size={18} />, color: '#34D399' },
   { key: 'job_discovery',    label: 'Job\nDiscovery',   icon: <Search size={18} />,         color: '#00D4FF' },
   { key: 'applying',         label: 'App\nEngine',      icon: <FileText size={18} />,       color: '#10B981' },
   { key: 'tracking',         label: 'Status\nTracker',  icon: <Activity size={18} />,       color: '#F59E0B' },
@@ -176,8 +177,9 @@ function Pipeline({ currentPhase, summary }: { currentPhase: string; summary: Da
 // ── Module Grid ────────────────────────────────────────────────────────────────
 
 const MODULE_DEFS = [
-  { key: 'github',       name: 'GitHub Intel',        icon: Github,         metricKey: 'github_score',    metricLabel: 'profile score /100', color: '#8B5CF6', screen: 'github'       },
-  { key: 'discovery',    name: 'Job Discovery',        icon: Search,         metricKey: 'jobs_found',      metricLabel: 'jobs found',         color: '#00D4FF', screen: 'discovery'    },
+  { key: 'github',         name: 'GitHub Intel',        icon: Github,          metricKey: 'github_score',    metricLabel: 'profile score /100', color: '#8B5CF6', screen: 'github'        },
+  { key: 'resume_review',  name: 'Resume Review',       icon: ClipboardCheck,  metricKey: 'resume_score',    metricLabel: 'resume score /10',   color: '#34D399', screen: 'resume-review' },
+  { key: 'discovery',      name: 'Job Discovery',       icon: Search,          metricKey: 'jobs_found',      metricLabel: 'jobs found',         color: '#00D4FF', screen: 'discovery'     },
   { key: 'application',  name: 'Application Engine',  icon: FileText,       metricKey: 'apps_submitted',  metricLabel: 'submitted',          color: '#10B981', screen: 'applications' },
   { key: 'status',       name: 'Status Tracker',       icon: Activity,       metricKey: 'ghosted',         metricLabel: 'ghosted',            color: '#F59E0B', screen: 'applications' },
   { key: 'prep',         name: 'Interview Prep',       icon: MessageSquare,  metricKey: 'prep_sessions',   metricLabel: 'sessions ready',     color: '#EC4899', screen: 'interview'    },
@@ -351,15 +353,19 @@ export default function Dashboard({ summary, moduleStates, onRunModule, onRefres
             {MODULE_DEFS.map(m => {
               const state  = moduleStates[m.key] ?? { status: 'idle' }
               const metric = (summary as unknown as Record<string, unknown>)?.[m.metricKey] ?? state.metric ?? '—'
+              // Resume review requires a file upload — RUN navigates to its screen
+              const handleRun = m.key === 'resume_review'
+                ? () => onNavigate(m.screen)
+                : () => onRunModule(m.key)
               return (
                 <ModuleCard
                   key={m.key}
                   def={m}
                   state={state}
                   metric={String(metric)}
-                  onRun={() => onRunModule(m.key)}
+                  onRun={handleRun}
                   onView={() => onNavigate(m.screen)}
-                  disabled={!!activeJobId}
+                  disabled={!!activeJobId && m.key !== 'resume_review'}
                 />
               )
             })}

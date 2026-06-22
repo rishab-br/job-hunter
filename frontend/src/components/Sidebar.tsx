@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare, Bot,
+  LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare, Bot, ClipboardCheck,
   Plus, ChevronDown, LogOut,
 } from 'lucide-react'
 import type { AuthState, Session, Screen } from '../types'
@@ -8,7 +8,8 @@ interface NavItem { id: Screen; label: string; icon: React.ReactNode; accent: st
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard',    label: 'Dashboard',      icon: <LayoutDashboard size={15} />, accent: '#00D4FF' },
-  { id: 'github',       label: 'GitHub Intel',   icon: <Github size={15} />,          accent: '#8B5CF6' },
+  { id: 'github',        label: 'GitHub Intel',   icon: <Github size={15} />,           accent: '#8B5CF6' },
+  { id: 'resume-review', label: 'Resume Review', icon: <ClipboardCheck size={15} />,   accent: '#34D399' },
   { id: 'discovery',    label: 'Job Discovery',  icon: <Search size={15} />,           accent: '#00D4FF' },
   { id: 'applications', label: 'Applications',   icon: <FileText size={15} />,         accent: '#10B981' },
   { id: 'interview',    label: 'Interview Prep', icon: <MessageSquare size={15} />,    accent: '#EC4899' },

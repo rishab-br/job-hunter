@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import runner, autopilot_scheduler
-from backend.routes import sessions, modules, data, stream, auth, autopilot as autopilot_routes
+from backend.routes import sessions, modules, data, stream, auth, autopilot as autopilot_routes, resume_review as resume_review_routes
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ app.include_router(modules.router)
 app.include_router(data.router)
 app.include_router(stream.router)
 app.include_router(autopilot_routes.router)
+app.include_router(resume_review_routes.router)
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────

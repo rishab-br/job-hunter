@@ -202,9 +202,10 @@ def submit_job(
 # ── Subgraph registry — single-module runs bypass the master orchestrator ─────
 # This prevents github → job_discovery → application → ... cascade.
 _STANDALONE_SUBGRAPHS = {
-    "github":        "agents.github_intelligence",
-    "job_discovery": "agents.job_discovery",
-    "status":        "agents.status_tracker",
+    "github":         "agents.github_intelligence",
+    "resume_review":  "agents.resume_reviewer",
+    "job_discovery":  "agents.job_discovery",
+    "status":         "agents.status_tracker",
 }
 
 
@@ -275,6 +276,7 @@ def _worker(
             pkg = importlib.import_module(_STANDALONE_SUBGRAPHS[module])
             phase_map = {
                 "github":        SystemPhase.GITHUB_ANALYSIS,
+                "resume_review": SystemPhase.RESUME_REVIEW,
                 "job_discovery": SystemPhase.JOB_DISCOVERY,
                 "status":        SystemPhase.TRACKING,
             }

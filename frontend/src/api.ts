@@ -61,6 +61,18 @@ export const api = {
   },
 
 
+  resumeReview: {
+    run: (threadId: string, file: File): Promise<{ job_id: string; thread_id: string }> => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('thread_id', threadId)
+      return fetch('/api/resume-review/run', { method: 'POST', body: form }).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+    },
+  },
+
   autopilot: {
     status: () =>
       request<AutopilotStatus>('/api/autopilot/status'),

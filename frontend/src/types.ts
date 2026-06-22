@@ -21,6 +21,8 @@ export interface DashboardSummary {
   ghosted: number
   current_phase: string
   logs: string[]
+  github_score?: number
+  resume_score?: number
   has_github_analysis?: boolean
   has_job_discovery?: boolean
   has_applying?: boolean
@@ -166,8 +168,29 @@ export interface PendingApproval {
   remaining?: number
 }
 
-export type Screen = 'dashboard' | 'github' | 'discovery' | 'applications' | 'offers' | 'interview' | 'autopilot'
+export type Screen = 'dashboard' | 'github' | 'resume-review' | 'discovery' | 'applications' | 'offers' | 'interview' | 'autopilot'
 export type ModalType = null | 'new-session' | 'offer' | 'prep'
+
+// ── Resume Reviewer ───────────────────────────────────────────────────────────
+
+export interface ResumeStrength  { point: string; detail: string }
+export interface ResumeWeakness  { point: string; detail: string }
+export interface MissingSkill    { skill: string; importance: 'critical' | 'important' | 'nice-to-have'; why: string }
+export interface Recommendation  { action: string; impact: 'high' | 'medium' | 'low' }
+
+export interface ResumeReview {
+  overall_score: number
+  score_rationale: string
+  role_fit: 'strong' | 'moderate' | 'weak'
+  format_quality: 'excellent' | 'good' | 'average' | 'poor'
+  strengths: ResumeStrength[]
+  weaknesses: ResumeWeakness[]
+  missing_skills: MissingSkill[]
+  ats_score: number
+  ats_concerns: string[]
+  market_alignment: string
+  recommendations: Recommendation[]
+}
 
 // ── Autopilot ─────────────────────────────────────────────────────────────────
 

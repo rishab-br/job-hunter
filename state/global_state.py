@@ -6,6 +6,7 @@ from enum import Enum
 class SystemPhase(str, Enum):
     IDLE = "idle"
     GITHUB_ANALYSIS = "github_analysis"
+    RESUME_REVIEW = "resume_review"
     JOB_DISCOVERY = "job_discovery"
     APPLYING = "applying"
     TRACKING = "tracking"
@@ -35,6 +36,10 @@ class GlobalState(TypedDict):
     trend_data: Optional[dict[str, Any]]
     gap_analysis: Optional[dict[str, Any]]
     improvement_plan: Optional[list[dict[str, Any]]]
+
+    # ── Resume Reviewer ────────────────────────────────────────────────────────
+    resume_text: Optional[str]             # raw text extracted from uploaded resume
+    resume_review: Optional[dict[str, Any]]  # structured LLM review output
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
     # LLM-expanded search titles — e.g. ["AI Engineer", "AI Developer", "GenAI Engineer"]
@@ -95,6 +100,8 @@ def initial_state(
         trend_data=None,
         gap_analysis=None,
         improvement_plan=None,
+        resume_text=None,
+        resume_review=None,
         search_roles=None,
         discovery_filters=None,
         discovered_jobs=None,

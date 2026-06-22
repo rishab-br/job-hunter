@@ -82,6 +82,9 @@ async def get_summary(thread_id: str):
         "github_score":    audit.get("overall_score"),
         "repos_analyzed":  audit.get("repos_analyzed") or len(repos) or None,
 
+        # Resume Review
+        "resume_score":    (state.get("resume_review") or {}).get("overall_score"),
+
         # Job Discovery
         "jobs_found":      len(state.get("discovered_jobs") or []),
         "jobs_high_fit":   sum(1 for j in scored if j.get("relevance_score", 0) >= 75),
