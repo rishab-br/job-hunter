@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare, Bot, ClipboardCheck,
-  Plus, ChevronDown, LogOut,
+  FilePen, Plus, ChevronDown, LogOut,
 } from 'lucide-react'
 import type { AuthState, Session, Screen } from '../types'
 
@@ -11,6 +11,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'github',        label: 'GitHub Intel',   icon: <Github size={15} />,           accent: '#8B5CF6' },
   { id: 'resume-review', label: 'Resume Review', icon: <ClipboardCheck size={15} />,   accent: '#34D399' },
   { id: 'discovery',    label: 'Job Discovery',  icon: <Search size={15} />,           accent: '#00D4FF' },
+  { id: 'ats-modifier', label: 'ATS Modifier',   icon: <FilePen size={15} />,          accent: '#F97316' },
   { id: 'applications', label: 'Applications',   icon: <FileText size={15} />,         accent: '#10B981' },
   { id: 'interview',    label: 'Interview Prep', icon: <MessageSquare size={15} />,    accent: '#EC4899' },
   { id: 'offers',       label: 'Offer Intel',    icon: <DollarSign size={15} />,       accent: '#F59E0B' },

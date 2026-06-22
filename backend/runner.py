@@ -204,6 +204,7 @@ def submit_job(
 _STANDALONE_SUBGRAPHS = {
     "github":         "agents.github_intelligence",
     "resume_review":  "agents.resume_reviewer",
+    "ats_modifier":   "agents.ats_modifier",
     "job_discovery":  "agents.job_discovery",
     "status":         "agents.status_tracker",
 }
@@ -277,6 +278,7 @@ def _worker(
             phase_map = {
                 "github":        SystemPhase.GITHUB_ANALYSIS,
                 "resume_review": SystemPhase.RESUME_REVIEW,
+                "ats_modifier":  SystemPhase.ATS_MODIFIER,
                 "job_discovery": SystemPhase.JOB_DISCOVERY,
                 "status":        SystemPhase.TRACKING,
             }

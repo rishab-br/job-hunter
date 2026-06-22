@@ -8,6 +8,7 @@ import Applications from './screens/Applications'
 import Offers       from './screens/Offers'
 import InterviewPrep from './screens/InterviewPrep'
 import ResumeReview from './screens/ResumeReview'
+import ATSModifier  from './screens/ATSModifier'
 import Autopilot from './screens/Autopilot'
 import NewSessionModal from './modals/NewSessionModal'
 import OfferModal      from './modals/OfferModal'
@@ -330,6 +331,7 @@ export default function App() {
           {screen === 'offers'       && <Offers       threadId={threadId} moduleState={moduleStates['offer']       ?? { status: 'idle' }} onRunModule={handleRunModule} onOpenOfferModal={() => setModal('offer')} activeJobId={activeJobId} />}
           {screen === 'interview'    && <InterviewPrep threadId={threadId} moduleState={moduleStates['prep']       ?? { status: 'idle' }} onOpenPrepModal={() => setModal('prep')} activeJobId={activeJobId} />}
           {screen === 'resume-review' && <ResumeReview threadId={threadId} />}
+          {screen === 'ats-modifier'  && <ATSModifier  threadId={threadId} />}
           {screen === 'autopilot'   && <Autopilot />}
         </div>
 

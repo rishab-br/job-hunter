@@ -8,6 +8,7 @@ class SystemPhase(str, Enum):
     GITHUB_ANALYSIS = "github_analysis"
     RESUME_REVIEW = "resume_review"
     JOB_DISCOVERY = "job_discovery"
+    ATS_MODIFIER = "ats_modifier"
     APPLYING = "applying"
     TRACKING = "tracking"
     OFFER_EVALUATION = "offer_evaluation"
@@ -40,6 +41,9 @@ class GlobalState(TypedDict):
     # ── Resume Reviewer ────────────────────────────────────────────────────────
     resume_text: Optional[str]             # raw text extracted from uploaded resume
     resume_review: Optional[dict[str, Any]]  # structured LLM review output
+
+    # ── ATS Modifier ───────────────────────────────────────────────────────────
+    ats_modified_resumes: Optional[list[dict[str, Any]]]  # newest-first, one per JD
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
     # LLM-expanded search titles — e.g. ["AI Engineer", "AI Developer", "GenAI Engineer"]
@@ -102,6 +106,7 @@ def initial_state(
         improvement_plan=None,
         resume_text=None,
         resume_review=None,
+        ats_modified_resumes=None,
         search_roles=None,
         discovery_filters=None,
         discovered_jobs=None,

@@ -23,6 +23,7 @@ export interface DashboardSummary {
   logs: string[]
   github_score?: number
   resume_score?: number
+  ats_tailored_count?: number
   has_github_analysis?: boolean
   has_job_discovery?: boolean
   has_applying?: boolean
@@ -168,7 +169,7 @@ export interface PendingApproval {
   remaining?: number
 }
 
-export type Screen = 'dashboard' | 'github' | 'resume-review' | 'discovery' | 'applications' | 'offers' | 'interview' | 'autopilot'
+export type Screen = 'dashboard' | 'github' | 'resume-review' | 'discovery' | 'ats-modifier' | 'applications' | 'offers' | 'interview' | 'autopilot'
 export type ModalType = null | 'new-session' | 'offer' | 'prep'
 
 // ── Resume Reviewer ───────────────────────────────────────────────────────────
@@ -190,6 +191,22 @@ export interface ResumeReview {
   ats_concerns: string[]
   market_alignment: string
   recommendations: Recommendation[]
+}
+
+// ── ATS Modifier ──────────────────────────────────────────────────────────────
+
+export interface ATSChange { section: string; change: string }
+
+export interface ATSModifiedResume {
+  company: string
+  job_title: string
+  jd_excerpt: string
+  tailored_resume: string
+  ats_score_estimate: number
+  keywords_matched: string[]
+  keywords_added: string[]
+  changes: ATSChange[]
+  generated_at: string
 }
 
 // ── Autopilot ─────────────────────────────────────────────────────────────────

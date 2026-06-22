@@ -61,6 +61,15 @@ export const api = {
   },
 
 
+  atsModifier: {
+    run: (threadId: string, jdText: string, company: string, jobTitle: string) =>
+      request<{ job_id: string; thread_id: string }>('/api/ats-modifier/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: threadId, jd_text: jdText, company, job_title: jobTitle }),
+      }),
+  },
+
   resumeReview: {
     run: (threadId: string, file: File): Promise<{ job_id: string; thread_id: string }> => {
       const form = new FormData()

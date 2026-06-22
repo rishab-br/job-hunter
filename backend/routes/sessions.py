@@ -85,6 +85,9 @@ async def get_summary(thread_id: str):
         # Resume Review
         "resume_score":    (state.get("resume_review") or {}).get("overall_score"),
 
+        # ATS Modifier
+        "ats_tailored_count": len(state.get("ats_modified_resumes") or []),
+
         # Job Discovery
         "jobs_found":      len(state.get("discovered_jobs") or []),
         "jobs_high_fit":   sum(1 for j in scored if j.get("relevance_score", 0) >= 75),
