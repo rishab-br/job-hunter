@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Github, Search, FileText, DollarSign, MessageSquare, Bot, ClipboardCheck,
-  FilePen, Plus, ChevronDown, LogOut,
+  FilePen, PenLine, Plus, ChevronDown, LogOut,
 } from 'lucide-react'
 import type { AuthState, Session, Screen } from '../types'
 
@@ -12,6 +12,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'resume-review', label: 'Resume Review', icon: <ClipboardCheck size={15} />,   accent: '#34D399' },
   { id: 'discovery',    label: 'Job Discovery',  icon: <Search size={15} />,           accent: '#00D4FF' },
   { id: 'ats-modifier', label: 'ATS Modifier',   icon: <FilePen size={15} />,          accent: '#F97316' },
+  { id: 'cover-letter', label: 'Cover Letter',   icon: <PenLine size={15} />,          accent: '#0EA5E9' },
   { id: 'applications', label: 'Applications',   icon: <FileText size={15} />,         accent: '#10B981' },
   { id: 'interview',    label: 'Interview Prep', icon: <MessageSquare size={15} />,    accent: '#EC4899' },
   { id: 'offers',       label: 'Offer Intel',    icon: <DollarSign size={15} />,       accent: '#F59E0B' },
@@ -74,7 +75,7 @@ export default function Sidebar({
               className="text-sm font-extrabold leading-tight"
               style={{ background: 'linear-gradient(90deg, #00D4FF, #60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
             >
-              JobHunter
+              Hunter
             </div>
             <div className="text-[9px] text-slate-600 tracking-wide mt-0.5">Autonomous career agent</div>
           </div>

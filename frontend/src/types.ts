@@ -24,6 +24,7 @@ export interface DashboardSummary {
   github_score?: number
   resume_score?: number
   ats_tailored_count?: number
+  cover_letter_count?: number
   has_github_analysis?: boolean
   has_job_discovery?: boolean
   has_applying?: boolean
@@ -169,7 +170,7 @@ export interface PendingApproval {
   remaining?: number
 }
 
-export type Screen = 'dashboard' | 'github' | 'resume-review' | 'discovery' | 'ats-modifier' | 'applications' | 'offers' | 'interview' | 'autopilot'
+export type Screen = 'dashboard' | 'github' | 'resume-review' | 'discovery' | 'ats-modifier' | 'cover-letter' | 'applications' | 'offers' | 'interview' | 'autopilot'
 export type ModalType = null | 'new-session' | 'offer' | 'prep'
 
 // ── Resume Reviewer ───────────────────────────────────────────────────────────
@@ -206,6 +207,19 @@ export interface ATSModifiedResume {
   keywords_matched: string[]
   keywords_added: string[]
   changes: ATSChange[]
+  generated_at: string
+}
+
+// ── Cover Letter ──────────────────────────────────────────────────────────────
+
+export interface CoverLetter {
+  company: string
+  job_title: string
+  cover_letter: string
+  key_points: string[]
+  word_count: number | null
+  tone: 'professional' | 'conversational' | 'enthusiastic'
+  has_jd: boolean
   generated_at: string
 }
 

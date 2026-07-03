@@ -1,4 +1,4 @@
-import { RefreshCw, Search, Github, FileText, DollarSign, MessageSquare, Activity, Play, Square, TrendingUp, Briefcase, Star, ClipboardCheck, FilePen } from 'lucide-react'
+import { RefreshCw, Search, Github, FileText, DollarSign, MessageSquare, Activity, Play, Square, TrendingUp, Briefcase, Star, ClipboardCheck, FilePen, PenLine } from 'lucide-react'
 import type { DashboardSummary, ModuleState } from '../types'
 
 interface DashboardProps {
@@ -80,6 +80,7 @@ const PIPE_STEPS = [
   { key: 'resume_review',    label: 'Resume\nReview',   icon: <ClipboardCheck size={18} />, color: '#34D399' },
   { key: 'job_discovery',    label: 'Job\nDiscovery',   icon: <Search size={18} />,         color: '#00D4FF' },
   { key: 'ats_modifier',    label: 'ATS\nModifier',    icon: <FilePen size={18} />,        color: '#F97316' },
+  { key: 'cover_letter',    label: 'Cover\nLetter',    icon: <PenLine size={18} />,        color: '#0EA5E9' },
   { key: 'applying',         label: 'App\nEngine',      icon: <FileText size={18} />,       color: '#10B981' },
   { key: 'tracking',         label: 'Status\nTracker',  icon: <Activity size={18} />,       color: '#F59E0B' },
   { key: 'interview_prep',   label: 'Interview\nPrep',  icon: <MessageSquare size={18} />,  color: '#EC4899' },
@@ -181,7 +182,8 @@ const MODULE_DEFS = [
   { key: 'github',         name: 'GitHub Intel',        icon: Github,          metricKey: 'github_score',    metricLabel: 'profile score /100', color: '#8B5CF6', screen: 'github'        },
   { key: 'resume_review',  name: 'Resume Review',       icon: ClipboardCheck,  metricKey: 'resume_score',      metricLabel: 'resume score /10',   color: '#34D399', screen: 'resume-review' },
   { key: 'discovery',      name: 'Job Discovery',       icon: Search,          metricKey: 'jobs_found',        metricLabel: 'jobs found',         color: '#00D4FF', screen: 'discovery'     },
-  { key: 'ats_modifier',   name: 'ATS Modifier',        icon: FilePen,         metricKey: 'ats_tailored_count', metricLabel: 'resumes tailored',  color: '#F97316', screen: 'ats-modifier'  },
+  { key: 'ats_modifier',   name: 'ATS Modifier',        icon: FilePen,         metricKey: 'ats_tailored_count',  metricLabel: 'resumes tailored',  color: '#F97316', screen: 'ats-modifier'  },
+  { key: 'cover_letter',   name: 'Cover Letter',        icon: PenLine,         metricKey: 'cover_letter_count', metricLabel: 'letters written',   color: '#0EA5E9', screen: 'cover-letter'  },
   { key: 'application',  name: 'Application Engine',  icon: FileText,       metricKey: 'apps_submitted',  metricLabel: 'submitted',          color: '#10B981', screen: 'applications' },
   { key: 'status',       name: 'Status Tracker',       icon: Activity,       metricKey: 'ghosted',         metricLabel: 'ghosted',            color: '#F59E0B', screen: 'applications' },
   { key: 'prep',         name: 'Interview Prep',       icon: MessageSquare,  metricKey: 'prep_sessions',   metricLabel: 'sessions ready',     color: '#EC4899', screen: 'interview'    },
@@ -356,7 +358,7 @@ export default function Dashboard({ summary, moduleStates, onRunModule, onRefres
               const state  = moduleStates[m.key] ?? { status: 'idle' }
               const metric = (summary as unknown as Record<string, unknown>)?.[m.metricKey] ?? state.metric ?? '—'
               // These modules need their own screen for input — RUN navigates rather than calling API
-              const needsScreen = m.key === 'resume_review' || m.key === 'ats_modifier'
+              const needsScreen = m.key === 'resume_review' || m.key === 'ats_modifier' || m.key === 'cover_letter'
               const handleRun = needsScreen ? () => onNavigate(m.screen) : () => onRunModule(m.key)
               return (
                 <ModuleCard

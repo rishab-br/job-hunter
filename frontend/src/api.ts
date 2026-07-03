@@ -61,6 +61,15 @@ export const api = {
   },
 
 
+  coverLetter: {
+    run: (threadId: string, company: string, jobTitle: string, jdText: string, tone: string) =>
+      request<{ job_id: string; thread_id: string }>('/api/cover-letter/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: threadId, company, job_title: jobTitle, jd_text: jdText, tone }),
+      }),
+  },
+
   atsModifier: {
     run: (threadId: string, jdText: string, company: string, jobTitle: string) =>
       request<{ job_id: string; thread_id: string }>('/api/ats-modifier/run', {

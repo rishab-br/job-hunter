@@ -9,6 +9,7 @@ class SystemPhase(str, Enum):
     RESUME_REVIEW = "resume_review"
     JOB_DISCOVERY = "job_discovery"
     ATS_MODIFIER = "ats_modifier"
+    COVER_LETTER = "cover_letter"
     APPLYING = "applying"
     TRACKING = "tracking"
     OFFER_EVALUATION = "offer_evaluation"
@@ -44,6 +45,9 @@ class GlobalState(TypedDict):
 
     # ── ATS Modifier ───────────────────────────────────────────────────────────
     ats_modified_resumes: Optional[list[dict[str, Any]]]  # newest-first, one per JD
+
+    # ── Cover Letter ───────────────────────────────────────────────────────────
+    cover_letters: Optional[list[dict[str, Any]]]  # newest-first, one per application
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
     # LLM-expanded search titles — e.g. ["AI Engineer", "AI Developer", "GenAI Engineer"]
@@ -107,6 +111,7 @@ def initial_state(
         resume_text=None,
         resume_review=None,
         ats_modified_resumes=None,
+        cover_letters=None,
         search_roles=None,
         discovery_filters=None,
         discovered_jobs=None,

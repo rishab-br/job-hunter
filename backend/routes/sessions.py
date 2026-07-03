@@ -88,6 +88,9 @@ async def get_summary(thread_id: str):
         # ATS Modifier
         "ats_tailored_count": len(state.get("ats_modified_resumes") or []),
 
+        # Cover Letter
+        "cover_letter_count": len(state.get("cover_letters") or []),
+
         # Job Discovery
         "jobs_found":      len(state.get("discovered_jobs") or []),
         "jobs_high_fit":   sum(1 for j in scored if j.get("relevance_score", 0) >= 75),

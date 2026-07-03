@@ -205,6 +205,7 @@ _STANDALONE_SUBGRAPHS = {
     "github":         "agents.github_intelligence",
     "resume_review":  "agents.resume_reviewer",
     "ats_modifier":   "agents.ats_modifier",
+    "cover_letter":   "agents.cover_letter",
     "job_discovery":  "agents.job_discovery",
     "status":         "agents.status_tracker",
 }
@@ -279,6 +280,7 @@ def _worker(
                 "github":        SystemPhase.GITHUB_ANALYSIS,
                 "resume_review": SystemPhase.RESUME_REVIEW,
                 "ats_modifier":  SystemPhase.ATS_MODIFIER,
+                "cover_letter":  SystemPhase.COVER_LETTER,
                 "job_discovery": SystemPhase.JOB_DISCOVERY,
                 "status":        SystemPhase.TRACKING,
             }
