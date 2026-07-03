@@ -45,9 +45,18 @@ class GlobalState(TypedDict):
 
     # ── ATS Modifier ───────────────────────────────────────────────────────────
     ats_modified_resumes: Optional[list[dict[str, Any]]]  # newest-first, one per JD
+    # Per-run input — must be declared here since LangGraph only carries schema-declared
+    # keys through graph.stream(); undeclared keys are silently dropped before the node runs.
+    _ats_jd_text: Optional[str]
+    _ats_company: Optional[str]
+    _ats_job_title: Optional[str]
 
     # ── Cover Letter ───────────────────────────────────────────────────────────
     cover_letters: Optional[list[dict[str, Any]]]  # newest-first, one per application
+    _cl_company: Optional[str]
+    _cl_job_title: Optional[str]
+    _cl_jd_text: Optional[str]
+    _cl_tone: Optional[str]
 
     # ── Job Discovery ──────────────────────────────────────────────────────────
     # LLM-expanded search titles — e.g. ["AI Engineer", "AI Developer", "GenAI Engineer"]
