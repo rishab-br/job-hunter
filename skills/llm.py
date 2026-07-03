@@ -67,8 +67,52 @@ def call(system: str, user: str, max_tokens: int = 2048) -> str:
 
 # ── JSON call ─────────────────────────────────────────────────────────────────
 
+def _sanitize_json_control_chars(raw: str) -> str:
+    """Escape literal control characters (newline, tab, CR) found inside JSON
+    string literals. LLMs occasionally emit multi-paragraph string values with
+    raw newlines instead of the escaped \\n sequence, which breaks json.loads()
+    even though the rest of the payload is well-formed."""
+    out = []
+    in_string = False
+    escape = False
+    for ch in raw:
+        if in_string:
+            if escape:
+                out.append(ch)
+                escape = False
+            elif ch == "\\":
+                out.append(ch)
+                escape = True
+            elif ch == '"':
+                in_string = False
+                out.append(ch)
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            else:
+                out.append(ch)
+        else:
+            if ch == '"':
+                in_string = True
+            out.append(ch)
+    return "".join(out)
+
+
+def _parse_json_lenient(raw: str) -> dict | list:
+    """json.loads with one repair attempt for unescaped control chars in strings."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return json.loads(_sanitize_json_control_chars(raw))
+
+
 def call_json(system: str, user: str, max_tokens: int = 4096) -> dict | list:
     # Primary: Groq — plain text mode so it can return both dicts AND lists
+    # (json_object response_format would reject top-level arrays, which some
+    # callers — e.g. role_expander, improvement_planner — rely on)
     if _groq_available():
         try:
             resp = get_groq().chat.completions.create(
@@ -84,7 +128,7 @@ def call_json(system: str, user: str, max_tokens: int = 4096) -> dict | list:
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[1]
                 raw = raw.rsplit("```", 1)[0]
-            return json.loads(raw.strip())
+            return _parse_json_lenient(raw.strip())
         except Exception as e:
             log.warning(f"Groq JSON call failed: {e}. Falling back to Gemini.")
 
@@ -99,7 +143,7 @@ def call_json(system: str, user: str, max_tokens: int = 4096) -> dict | list:
                 response_mime_type="application/json",
             ),
         )
-        return json.loads(response.text)
+        return _parse_json_lenient(response.text)
     except json.JSONDecodeError as e:
         log.error(f"Gemini returned invalid JSON: {e}")
         raise
