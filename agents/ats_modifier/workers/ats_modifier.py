@@ -1,6 +1,6 @@
 """ATS-optimised resume tailoring — rewrites the base resume to match a specific JD."""
 from datetime import datetime, timezone
-from skills import llm
+from skills import llm, file_tools
 from state import GlobalState
 
 _SYSTEM = (
@@ -26,17 +26,26 @@ Job Title: {job_title}
 {review_context}
 
 ## Your Task
-Rewrite the resume to:
-1. Mirror the JD's exact language — use the same keywords, acronyms, and phrases
-2. Reorder bullet points so the most JD-relevant achievements appear first
-3. Add any skills / tools / methodologies from the JD that the candidate genuinely has (inferred from the resume) but didn't explicitly list
-4. Remove or deprioritise content irrelevant to this specific role
-5. Use ATS-safe formatting: plain text, no tables, no columns, simple bullet points with hyphens
-6. Keep all dates, titles, company names, and facts exactly as they appear — do NOT fabricate anything
+Rewrite the resume's WORDING to better match the JD — do NOT redesign or restructure it:
+1. Keep the exact same sections, in the exact same order, as the original resume (do not add, remove, rename, split, or reorder sections)
+2. Within each section, mirror the JD's exact language — same keywords, acronyms, and phrases where truthful
+3. Reorder bullet points WITHIN a section so the most JD-relevant achievements appear first
+4. Add any skills / tools / methodologies from the JD that the candidate genuinely has (inferred from the resume) but didn't explicitly list
+5. Keep all dates, titles, company names, and facts exactly as they appear — do NOT fabricate anything
+6. This is a wording and emphasis pass, not a redesign — the candidate's actual layout/structure stays intact
+
+## Output Format (critical — this becomes a real downloadable PDF)
+Format "tailored_resume" as clean, ATS-safe Markdown so it renders correctly:
+- Line 1: `# Full Name` (exactly as in the original resume)
+- Line 2: plain text contact line (phone | email | LinkedIn | GitHub etc.) — no heading, no markdown link syntax
+- Each resume section: `## SECTION NAME` (reuse the original resume's own section names, uppercase)
+- Bullet points: `- ` (hyphen + space) — never use tables, columns, or nested bullets
+- Use `**bold**` sparingly, only for role titles / company names on their own line
+- No emojis, no horizontal rules, no images
 
 Return a JSON object with EXACTLY this structure (no markdown fences):
 {{
-  "tailored_resume": "<full rewritten resume as a plain text string — preserve \\n newlines>",
+  "tailored_resume": "<full rewritten resume as clean ATS-safe Markdown — preserve \\n newlines>",
   "ats_score_estimate": <number 1-10, one decimal — estimated ATS match score for this JD>,
   "keywords_matched": ["<keyword from JD already in original resume>"],
   "keywords_added": ["<keyword from JD not in original but now integrated>"],
@@ -49,7 +58,7 @@ Return a JSON object with EXACTLY this structure (no markdown fences):
 }}
 
 Rules:
-- tailored_resume: complete resume text, ready to paste — minimum 200 words
+- tailored_resume: complete resume, ready to render — minimum 200 words
 - keywords_matched: 5-15 items
 - keywords_added: 3-10 items (only genuinely inferrable from resume, no fabrication)
 - changes: 4-10 specific, concrete changes made
@@ -107,6 +116,7 @@ def run(state: GlobalState) -> GlobalState:
     )
 
     result = llm.call_json(_SYSTEM, user_prompt, max_tokens=4096)
+    tailored_md = result.get("tailored_resume", "")
 
     logs.append(
         f"[ats_modifier] Done — ATS estimate {result.get('ats_score_estimate', '?')}/10, "
@@ -114,20 +124,37 @@ def run(state: GlobalState) -> GlobalState:
         f"{len(result.get('changes', []))} changes made"
     )
 
+    # Render a downloadable, ATS-safe PDF from the tailored Markdown
+    pdf_path = None
+    if tailored_md.strip():
+        try:
+            filename = _safe_filename(company, job_title) + "_resume.pdf"
+            pdf_path = str(file_tools.save_pdf_from_markdown(tailored_md, "ats_modifier", filename))
+            logs.append(f"[ats_modifier] Rendered PDF → {pdf_path}")
+        except Exception as exc:
+            logs.append(f"[ats_modifier] PDF render failed ({exc}) — text still available.")
+
     # Build the record and prepend (newest first)
     record = {
-        "company":           company,
-        "job_title":         job_title,
-        "jd_excerpt":        jd_text[:300],
-        "tailored_resume":   result.get("tailored_resume", ""),
+        "company":            company,
+        "job_title":          job_title,
+        "jd_excerpt":         jd_text[:300],
+        "tailored_resume":    tailored_md,
+        "resume_pdf_path":    pdf_path,
         "ats_score_estimate": result.get("ats_score_estimate"),
-        "keywords_matched":  result.get("keywords_matched", []),
-        "keywords_added":    result.get("keywords_added", []),
-        "changes":           result.get("changes", []),
-        "generated_at":      datetime.now(timezone.utc).isoformat(),
+        "keywords_matched":   result.get("keywords_matched", []),
+        "keywords_added":     result.get("keywords_added", []),
+        "changes":            result.get("changes", []),
+        "generated_at":       datetime.now(timezone.utc).isoformat(),
     }
 
     existing = list(state.get("ats_modified_resumes") or [])
     updated  = [record] + existing   # newest first
 
     return {**state, "ats_modified_resumes": updated, "logs": logs}
+
+
+def _safe_filename(company: str, role: str) -> str:
+    def clean(s: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_" else "_" for c in s.lower())[:30]
+    return f"{clean(company)}_{clean(role)}"

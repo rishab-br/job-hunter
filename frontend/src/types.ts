@@ -203,6 +203,7 @@ export interface ATSModifiedResume {
   job_title: string
   jd_excerpt: string
   tailored_resume: string
+  resume_pdf_path?: string | null
   ats_score_estimate: number
   keywords_matched: string[]
   keywords_added: string[]

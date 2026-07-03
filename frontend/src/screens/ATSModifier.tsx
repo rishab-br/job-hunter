@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   FilePen, Loader2, Copy, Check, ChevronDown, ChevronUp,
-  Plus, Minus, Zap, Tag, ArrowRight, Clock,
+  Plus, Minus, Zap, Tag, ArrowRight, Clock, Download,
 } from 'lucide-react'
 import { api, createSSE } from '../api'
 import { parseLogLine } from '../components/LogPanel'
@@ -103,6 +103,20 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+function DownloadPdfButton({ path }: { path: string }) {
+  return (
+    <a
+      href={api.files.url(path)}
+      download
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all"
+      style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.35)', color: '#F97316' }}
+    >
+      <Download size={11} />
+      Download PDF
+    </a>
+  )
+}
+
 // ── History sidebar item ───────────────────────────────────────────────────────
 
 function HistoryItem({ record, active, onClick }: {
@@ -184,8 +198,11 @@ function ResultPanel({ record }: { record: ATSModifiedResume }) {
         <div className="flex flex-col flex-1 min-h-0 rounded-xl border border-white/[0.07] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]"
                style={{ background: 'rgba(255,255,255,0.02)' }}>
-            <span className="text-[10px] text-slate-500 font-mono">tailored_resume.txt</span>
-            <CopyButton text={record.tailored_resume} />
+            <span className="text-[10px] text-slate-500 font-mono">tailored_resume.md</span>
+            <div className="flex items-center gap-2">
+              {record.resume_pdf_path && <DownloadPdfButton path={record.resume_pdf_path} />}
+              <CopyButton text={record.tailored_resume} />
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <pre className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap font-mono">
