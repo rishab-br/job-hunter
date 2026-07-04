@@ -9,7 +9,16 @@ log = logging.getLogger(__name__)
 _gemini_client: genai.Client | None = None
 _groq_client = None
 
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
+
+# GPT-OSS is a reasoning model — hidden chain-of-thought tokens are billed
+# against max_tokens before any answer content is emitted, and the amount it
+# reasons is non-deterministic (observed 5-60+ tokens even at reasoning_effort
+# "low" on trivial prompts). This project's per-call max_tokens budgets were
+# tuned for a non-reasoning model and are callers' budget for the *answer*, so
+# we pad the value actually sent to Groq with a fixed reasoning reserve —
+# verified empirically to eliminate truncated-to-empty responses.
+_REASONING_RESERVE = 1024
 
 
 def get_gemini() -> genai.Client:
@@ -47,7 +56,8 @@ def call(system: str, user: str, max_tokens: int = 2048) -> str:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                max_tokens=max_tokens,
+                max_tokens=max_tokens + _REASONING_RESERVE,
+                reasoning_effort="low",
             )
             return resp.choices[0].message.content
         except Exception as e:
@@ -121,7 +131,8 @@ def call_json(system: str, user: str, max_tokens: int = 4096) -> dict | list:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user + "\n\nRespond with valid JSON only. No markdown fences, no explanation."},
                 ],
-                max_tokens=max_tokens,
+                max_tokens=max_tokens + _REASONING_RESERVE,
+                reasoning_effort="low",
             )
             raw = resp.choices[0].message.content.strip()
             # Strip markdown code fences if model added them
